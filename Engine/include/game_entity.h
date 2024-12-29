@@ -1,0 +1,84 @@
+#pragma once
+#ifndef GAMEENTITY_H
+#define GAMEENTITY_H
+
+#include <raylib.h>
+
+typedef enum {
+    NONE,
+    LOW,
+    MEDIUM,
+    HIGH,
+    CRITICAL,
+    PLAYER,
+} PriorityRank;
+
+typedef struct s_Tag {
+    const char* tag;
+    unsigned int tag_id;
+
+    struct s_Tag* next;
+    struct s_Tag* prev;
+} t_Tag;
+
+// Define different collision types
+typedef enum {
+    COLLISION_AABB,    // Axis-Aligned Bounding Box
+    COLLISION_SPHERE,  // Sphere
+    // Additional collision types can be added here
+} CollisionType;
+
+typedef struct s_Entity {
+    // Common attributes
+    char* entity_name;
+    t_Tag* root_tag;
+    void* entity_data;
+
+    bool is_active;
+    unsigned char layer;
+    unsigned char num_tags;
+
+    float health;
+    float max_life_time;
+    float current_life_time;
+
+    PriorityRank priority_rank;
+
+    void (*on_start)(struct s_Entity* entity);
+    void (*update)(struct s_Entity* entity, float delta_time);
+    void (*on_collision)(struct s_Entity* other, struct s_Entity* entity);
+    void (*on_destroy)(struct s_Entity* entity);
+    void (*on_grounded)(struct s_Entity* entity);
+    void (*on_airborne)(struct s_Entity* entity);
+
+
+    struct {
+        Vector3 position;
+        Vector3 velocity;
+        Vector3 rotation_axis;
+        float rotation;
+        Vector3 scale;
+        int model_id;
+    } entity3D;
+
+    int rigid_body_id;
+
+    // Collision attributes
+    CollisionType collision_type;
+
+    // Physics attributes
+    Vector3 forceAccum;    // Accumulated forces
+    Vector3 acceleration;  // Current acceleration
+    float mass;
+    float inverseMass;     // For optimization
+    bool is_grounded;
+    bool is_static;        // If true, the entity is immovable
+    float dampingFactor;
+} t_Entity;
+
+typedef struct s_Texture {
+    char* texture_name;
+    Texture2D texture;
+} t_Texture;
+
+#endif
