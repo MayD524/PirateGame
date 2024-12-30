@@ -1,8 +1,15 @@
+#ifdef _WIN32
+    #include <minimal_windows.h>
+#endif
+
 #include <core.h>
 #include <custom3d.h>
 #include <player.h>
 #include <scene.h>
-#define DEBUG
+
+#ifdef __linux__
+    #define DEBUG
+#endif
 
 #ifdef DEBUG
     #include <mcheck.h>
@@ -88,21 +95,21 @@ int main() {
 
     Vector3 test = VEC3_ZERO;
 
-    // for (int i =0; i < 10; i+=2) { 
-    //     for (int j=0; j < 10; ++j) {
-    //         char *formattedString = NULL;
-    //         asprintf(&formattedString, "Test:%d",i+j);
-    //         t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
-    //         test = Vector3Add(test, (Vector3){ 2.0f, 0.0f, 0.0f});
-    //         e->update=SillyUpdate;
-    //     }
-    //     test = VEC3_ZERO;
-    //     test.z = i*2;
-    // }
+    for (int i = 0; i < 3; ++i) { 
+        for (int j=0; j < 3; ++j) {
+            char *formattedString = NULL;
+            asprintf(&formattedString, "Test:%d",i+j);
+            t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
+            test = Vector3Add(test, (Vector3){ 2.0f, 0.0f, 0.0f});
+            // e->update=SillyUpdate;
+        }
+        test = VEC3_ZERO;
+        test.z = i*2;
+    }
 
     test.y = 10;
 
-    t_Entity* ent = create_entity3D(engine->entity_system, "test11", "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, Vector3Scale(VEC3_ONE, 1.5f), 100.0f);
+    // t_Entity* ent = create_entity3D(engine->entity_system, "test11", "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, Vector3Scale(VEC3_ONE, 1.5f), 100.0f);
     // ent->is_static = true;
 
     add_scene(engine->scene_manager, scene);

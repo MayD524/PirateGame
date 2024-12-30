@@ -31,7 +31,7 @@
 #define EXIT_FAILURE 1
 
 #define FIXED_TIMESTEP 0.016666f // Approximately 60 updates per second
-
+#define PHYSICS_TIME 0.016666666666666666667f
 
 #include <raylib.h>
 #include <extended_memory.h>

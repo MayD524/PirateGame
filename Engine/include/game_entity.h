@@ -2,6 +2,7 @@
 #ifndef GAMEENTITY_H
 #define GAMEENTITY_H
 
+#include <pthread.h>
 #include <raylib.h>
 
 typedef enum {
@@ -91,6 +92,8 @@ typedef struct s_Entity {
     bool is_static;        // If true, the entity is immovable
     float dampingFactor;
     MatoMesh mesh;
+
+    pthread_mutex_t mutex;
 } t_Entity;
 
 typedef struct s_Texture {

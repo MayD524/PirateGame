@@ -211,8 +211,8 @@ int next_free_entity_slot(t_EntitySystem* entity_system, PriorityRank priority_r
 
 
 void update(t_EntitySystem* entity_system) {
-    float delta_time = GetFrameTime();
 
+    Physics_UpdateAll(entity_system->entities, entity_system->num_entities, PHYSICS_TIME);
     // Iterate through all active entities and integrate physics
     for (int i = 0; i < entity_system->num_entities; ++i) {
         t_Entity* e = entity_system->entities[i];
@@ -221,7 +221,7 @@ void update(t_EntitySystem* entity_system) {
         }
 
         // Update lifetime
-        e->current_life_time += delta_time;
+        e->current_life_time += PHYSICS_TIME;
         if (e->priority_rank != PLAYER && (e->current_life_time > e->max_life_time && e->max_life_time >= 0)) {
             e->current_life_time = 0;
             e->is_active = false;
@@ -243,11 +243,9 @@ void update(t_EntitySystem* entity_system) {
 
         // Call entity-specific update
         if (is_address_good(e->update)) {
-            e->update(e, delta_time);
+            e->update(e, PHYSICS_TIME);
         }
 
-        // Integrate physics for the entity
-        Physics_Integrate(e, delta_time);
     }
 
     // Handle collisions between entities
@@ -311,7 +309,7 @@ void DrawHitboxes(t_EntitySystem* entity_system, bool enableHitbox) {
                         if (drawMultipleBoxes) {
                             // Draw multiple bounding boxes (one for each mesh)
                             int meshCount = model.meshCount;
-                            BoundingBox* meshBoundingBoxes = get_model_mesh_bounding_boxes(model);
+                            BoundingBox* meshBoundingBoxes = minfo->mesh_bounding_boxes;
 
                             if (meshBoundingBoxes) {
                                 for (int j = 0; j < meshCount; ++j) {
@@ -331,11 +329,10 @@ void DrawHitboxes(t_EntitySystem* entity_system, bool enableHitbox) {
                                     // Draw the transformed bounding box
                                     DrawBoundingBox(transformedBox, hitboxColor);
                                 }
-                                free(meshBoundingBoxes); // Free allocated memory
                             }
                         } else {
                             // Draw a single bounding box covering the whole model
-                            BoundingBox modelBox = get_model_bounding_box(model);
+                            BoundingBox modelBox = minfo->full_box;
 
                             // Scale the bounding box to match the entity's size
                             Vector3 size = Vector3Subtract(modelBox.max, modelBox.min);
@@ -450,7 +447,7 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
         }
 
         // Calculate the model's offset using its bounding box
-        BoundingBox bbox = get_model_bounding_box(model);
+        BoundingBox bbox = minfo->full_box;
         Vector3 bboxCenter = Vector3Scale(Vector3Add(bbox.min, bbox.max), 0.5f);
         Vector3 adjustedPosition = Vector3Subtract(e->entity3D.position, bboxCenter);
 

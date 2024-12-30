@@ -96,11 +96,13 @@ void destroy_engine(Engine* engine) {
     close_lua(engine->lua_context);
     printf("Closing window\n");
     CloseWindow();
-    printf("Cleaning up entity system\n");
-    destroy_entity_system(engine->entity_system);
 
     printf("Cleaning up model manager");
     cleanup_model_manager(engine->model_manager);
+
+    Physics_CleanupEntities(engine->entity_system->entities, engine->entity_system->num_entities);
+    printf("Cleaning up entity system\n");
+    destroy_entity_system(engine->entity_system);
 
     // free_spatial_grid_3d(engine->grid3D);
     // free(engine->grid3D);
@@ -204,6 +206,9 @@ int add_model_info(const char* file_path) {
         }
         index = manager->model_count++;
     }
+
+    info->full_box = get_model_bounding_box(info->model);
+    info->mesh_bounding_boxes = get_model_mesh_bounding_boxes(info->model);
 
     int animCount = 0;
     ModelAnimation* loadedAnims = LoadModelAnimations(file_path, &animCount);

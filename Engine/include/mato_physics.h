@@ -54,5 +54,7 @@ Vector3 Vector3NormalizeCustom(const Vector3 v);
 
 // Raycasting Function to detect the first collision in a list of entities
 RayHit Physics_Raycast(t_Entity* entities[], int entityCount, Ray ray);
+void Physics_CleanupEntities(t_Entity* entities[], int entityCount);
+void Physics_UpdateAll(t_Entity* entities[], int entityCount, float deltaTime);
 
 #endif // PHYSICS_H

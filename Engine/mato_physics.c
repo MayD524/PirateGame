@@ -1,5 +1,7 @@
 // physics.c
 #include <mato_physics.h>
+#include <pthread.h>
+#include <omp.h>
 #include <math.h>
 #include <float.h>
 
@@ -8,7 +10,6 @@ static float CalculateInverseMass(float mass, bool is_static) {
     if (is_static || mass <= 0.0f) return 0.0f;
     return 1.0f / mass;
 }
-
 
 float Vector3LengthCustom(const Vector3 v) {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
@@ -31,7 +32,7 @@ void Physics_InitEntity(t_Entity* entity, Vector3 position, Vector3 scale, float
     entity->entity3D.rotation_axis = (Vector3){0.0f, 1.0f, 0.0f};
     entity->entity3D.rotation = 0.0f;
     entity->entity3D.scale = scale;
-    
+
     // Initialize physics attributes
     entity->forceAccum = (Vector3){0.0f, 0.0f, 0.0f};
     entity->acceleration = GRAVITY; // Default acceleration due to gravity
@@ -40,6 +41,11 @@ void Physics_InitEntity(t_Entity* entity, Vector3 position, Vector3 scale, float
     entity->is_static = is_static;
     entity->collision_type = collision_type;
     entity->dampingFactor = 100.0f;
+    entity->is_grounded = false;
+    entity->is_active = true;
+
+    // Initialize mutex for the entity
+    pthread_mutex_init(&entity->mutex, NULL);
 }
 
 // Apply a force to an entity
@@ -106,7 +112,7 @@ void Physics_Integrate(t_Entity* entity, float deltaTime) {
             float mass = (entity->inverseMass > 0.0f) ? (1.0f / entity->inverseMass) : FLT_MAX;
             float normal_force = mass * fabsf(GRAVITY.y); // Ensure gravity.y is positive
 
-            float friction_magnitude = normal_force * BASE_FRICTION ;
+            float friction_magnitude = normal_force * BASE_FRICTION;
 
             // Calculate friction force vector
             Vector3 friction_force = Vector3Scale(friction_dir, -friction_magnitude);
@@ -117,7 +123,7 @@ void Physics_Integrate(t_Entity* entity, float deltaTime) {
             // **Prevent Over-friction (Optional)**
             // Ensure that friction does not reverse the velocity direction
             // Compute the potential velocity change due to friction
-            float potential_velocity_change = friction_magnitude / mass * deltaTime;
+            float potential_velocity_change = friction_magnitude * deltaTime / mass;
 
             if (potential_velocity_change > speed) {
                 // Friction is strong enough to stop the entity
@@ -164,7 +170,6 @@ void Physics_Integrate(t_Entity* entity, float deltaTime) {
     entity->forceAccum = (Vector3){0.0f, 0.0f, 0.0f};
 }
 
-
 // General Collision Detection between two entities
 bool Physics_CheckCollision(const t_Entity* a, const t_Entity* b) {
     if (!a || !b) return false;
@@ -194,7 +199,7 @@ bool Physics_CheckCollisionAABB(const t_Entity* a, const t_Entity* b) {
     ModelInfo* modelInfoA = get_model_info(a->entity3D.model_id);
     if (modelInfoA) {
         // Use model bounding box and adjust to entity's position
-        BoundingBox modelBoxA = get_model_bounding_box(modelInfoA->model);
+        BoundingBox modelBoxA = modelInfoA->full_box;
         Vector3 bboxCenterA = Vector3Scale(Vector3Add(modelBoxA.min, modelBoxA.max), 0.5f);
         bboxA.min = Vector3Add(Vector3Subtract(modelBoxA.min, bboxCenterA), a->entity3D.position);
         bboxA.max = Vector3Add(Vector3Subtract(modelBoxA.max, bboxCenterA), a->entity3D.position);
@@ -208,7 +213,7 @@ bool Physics_CheckCollisionAABB(const t_Entity* a, const t_Entity* b) {
     ModelInfo* modelInfoB = get_model_info(b->entity3D.model_id);
     if (modelInfoB) {
         // Use model bounding box and adjust to entity's position
-        BoundingBox modelBoxB = get_model_bounding_box(modelInfoB->model);
+        BoundingBox modelBoxB = modelInfoB->full_box;
         Vector3 bboxCenterB = Vector3Scale(Vector3Add(modelBoxB.min, modelBoxB.max), 0.5f);
         bboxB.min = Vector3Add(Vector3Subtract(modelBoxB.min, bboxCenterB), b->entity3D.position);
         bboxB.max = Vector3Add(Vector3Subtract(modelBoxB.max, bboxCenterB), b->entity3D.position);
@@ -271,12 +276,23 @@ void Physics_ResolveCollision(t_Entity* a, t_Entity* b) {
     if (!a || !b) return;
     if (a->is_static && b->is_static) return;
 
+    // Lock both entities to prevent concurrent modifications
+    // To avoid deadlocks, always lock in a consistent order based on memory address
+    if (a < b) {
+        pthread_mutex_lock(&a->mutex);
+        pthread_mutex_lock(&b->mutex);
+    } else {
+        pthread_mutex_lock(&b->mutex);
+        pthread_mutex_lock(&a->mutex);
+    }
+
+    // Calculate bounding boxes
     BoundingBox bboxA, bboxB;
 
     // Calculate bounding box for entity A
     ModelInfo* modelInfoA = get_model_info(a->entity3D.model_id);
     if (modelInfoA) {
-        BoundingBox modelBoxA = get_model_bounding_box(modelInfoA->model);
+        BoundingBox modelBoxA = modelInfoA->full_box;
         Vector3 bboxCenterA = Vector3Scale(Vector3Add(modelBoxA.min, modelBoxA.max), 0.5f);
         bboxA.min = Vector3Add(Vector3Subtract(modelBoxA.min, bboxCenterA), a->entity3D.position);
         bboxA.max = Vector3Add(Vector3Subtract(modelBoxA.max, bboxCenterA), a->entity3D.position);
@@ -288,7 +304,7 @@ void Physics_ResolveCollision(t_Entity* a, t_Entity* b) {
     // Calculate bounding box for entity B
     ModelInfo* modelInfoB = get_model_info(b->entity3D.model_id);
     if (modelInfoB) {
-        BoundingBox modelBoxB = get_model_bounding_box(modelInfoB->model);
+        BoundingBox modelBoxB = modelInfoB->full_box;
         Vector3 bboxCenterB = Vector3Scale(Vector3Add(modelBoxB.min, modelBoxB.max), 0.5f);
         bboxB.min = Vector3Add(Vector3Subtract(modelBoxB.min, bboxCenterB), b->entity3D.position);
         bboxB.max = Vector3Add(Vector3Subtract(modelBoxB.max, bboxCenterB), b->entity3D.position);
@@ -297,7 +313,33 @@ void Physics_ResolveCollision(t_Entity* a, t_Entity* b) {
         bboxB.max = Vector3Add(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
     }
 
-    // Resolve collision along the minimum penetration axis (similar to existing logic)
+    // Simple separation along Y-axis (for demonstration)
+    float penetration = 0.0f;
+    Vector3 normal = {0.0f, 1.0f, 0.0f}; // Default normal
+
+    if (bboxA.max.y > bboxB.min.y && bboxA.min.y < bboxB.max.y) {
+        // Calculate penetration depth
+        penetration = bboxA.max.y - bboxB.min.y;
+
+        // Adjust positions to resolve collision
+        if (!a->is_static && !b->is_static) {
+            Vector3 correction = {0.0f, penetration / 2.0f, 0.0f};
+            a->entity3D.position.y -= correction.y;
+            b->entity3D.position.y += correction.y;
+        }
+        else if (!a->is_static) {
+            Vector3 correction = {0.0f, penetration, 0.0f};
+            a->entity3D.position.y -= correction.y;
+        }
+        else if (!b->is_static) {
+            Vector3 correction = {0.0f, penetration, 0.0f};
+            b->entity3D.position.y += correction.y;
+        }
+    }
+
+    // Unlock both entities
+    pthread_mutex_unlock(&a->mutex);
+    pthread_mutex_unlock(&b->mutex);
 }
 
 // Collision Resolution using Impulse-Based Response
@@ -305,11 +347,21 @@ void Physics_ResolveCollisionImpulse(t_Entity* a, t_Entity* b) {
     if (!a || !b) return;
     if (a->is_static && b->is_static) return;
 
+    // Lock both entities to prevent concurrent modifications
+    // To avoid deadlocks, always lock in a consistent order based on memory address
+    if (a < b) {
+        pthread_mutex_lock(&a->mutex);
+        pthread_mutex_lock(&b->mutex);
+    } else {
+        pthread_mutex_lock(&b->mutex);
+        pthread_mutex_lock(&a->mutex);
+    }
+
     // Calculate relative velocity
     Vector3 relativeVelocity = Vector3Subtract(b->entity3D.velocity, a->entity3D.velocity);
 
     // Determine collision normal based on AABB penetration
-    Vector3 normal = {0.0f, 0.0f, 0.0f};
+    Vector3 normal = {0.0f, 1.0f, 0.0f};
     float penetration = FLT_MAX; // Initialize with maximum float value
 
     if (a->collision_type == COLLISION_AABB && b->collision_type == COLLISION_AABB) {
@@ -363,7 +415,11 @@ void Physics_ResolveCollisionImpulse(t_Entity* a, t_Entity* b) {
     float velocityAlongNormal = Vector3DotProduct(relativeVelocity, normal);
 
     // Do not resolve if velocities are separating
-    if (velocityAlongNormal > 0) return;
+    if (velocityAlongNormal > 0) {
+        pthread_mutex_unlock(&a->mutex);
+        pthread_mutex_unlock(&b->mutex);
+        return;
+    }
 
     // Calculate restitution (bounciness)
     float restitution = 0.5f; // Adjust as needed (0 = inelastic, 1 = perfectly elastic)
@@ -395,25 +451,94 @@ void Physics_ResolveCollisionImpulse(t_Entity* a, t_Entity* b) {
             b->entity3D.position = Vector3Add(b->entity3D.position, Vector3Scale(correction, b->inverseMass));
         }
     }
-}
 
+    // Unlock both entities
+    pthread_mutex_unlock(&a->mutex);
+    pthread_mutex_unlock(&b->mutex);
+}
 
 // Raycasting function to detect the first collision in a list of entities
 RayHit Physics_Raycast(t_Entity* entities[], int entityCount, Ray ray) {
-    RayHit closestHit = {0};
+    RayHit closestHit;
     closestHit.collision.distance = FLT_MAX;
+    closestHit.entity = NULL;
 
-    for (int i = 0; i < entityCount; i++) {
-        t_Entity* entity = entities[i];
-        if (!entity->is_active) continue;
+    // Temporary storage for thread-local closest hits
+    int num_threads = omp_get_max_threads();
+    RayHit* threadClosestHits = (RayHit*)malloc(sizeof(RayHit) * num_threads);
+    if (!threadClosestHits) return closestHit;
 
-        RayCollision currentHit;
-        bool hit = Physics_RayIntersectsEntity(entity, ray, &currentHit);
-        if (hit && currentHit.distance < closestHit.collision.distance) {
-            closestHit.entity = entity;
-            closestHit.collision = currentHit;
+    for (int t = 0; t < num_threads; t++) {
+        threadClosestHits[t].collision.distance = FLT_MAX;
+        threadClosestHits[t].entity = NULL;
+    }
+
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        RayHit localClosestHit;
+        localClosestHit.collision.distance = FLT_MAX;
+        localClosestHit.entity = NULL;
+
+        #pragma omp for nowait
+        for (int i = 0; i < entityCount; i++) {
+            t_Entity* entity = entities[i];
+            if (!entity->is_active) continue;
+
+            RayCollision currentHit;
+            bool hit = Physics_RayIntersectsEntity(entity, ray, &currentHit);
+            if (hit && currentHit.distance < localClosestHit.collision.distance) {
+                localClosestHit.entity = entity;
+                localClosestHit.collision = currentHit;
+            }
+        }
+
+        // Store the local closest hit for this thread
+        threadClosestHits[thread_id] = localClosestHit;
+    }
+
+    // Find the closest hit among all threads
+    for (int t = 0; t < num_threads; t++) {
+        if (threadClosestHits[t].collision.distance < closestHit.collision.distance) {
+            closestHit = threadClosestHits[t];
         }
     }
 
+    free(threadClosestHits);
     return closestHit;
+}
+
+// Physics Update Function with Multithreading
+void Physics_UpdateAll(t_Entity* entities[], int entityCount, float deltaTime) {
+    #pragma omp parallel for schedule(guided)
+    for (int i = 0; i < entityCount; i++) {
+        Physics_Integrate(entities[i], deltaTime);
+    }
+
+    // Iterate over all unique pairs
+    #pragma omp parallel for schedule(guided)
+    for (int i = 0; i < entityCount; i++) {
+        t_Entity* entityA = entities[i];
+        if (!entityA->is_active) continue; // Early exit if entityA is inactive
+
+        for (int j = i + 1; j < entityCount; j++) {
+            t_Entity* entityB = entities[j];
+            if (!entityB->is_active) continue; // Skip inactive entityB
+
+            if (Physics_CheckCollision(entityA, entityB)) {
+                // It's assumed that Physics_ResolveCollisionImpulse is thread-safe
+                Physics_ResolveCollisionImpulse(entityA, entityB);
+            }
+        }
+    }
+
+}
+
+// Cleanup function to destroy mutexes (Call during shutdown)
+void Physics_CleanupEntities(t_Entity* entities[], int entityCount) {
+    for (int i = 0; i < entityCount; i++) {
+        if (entities[i]) {
+            pthread_mutex_destroy(&entities[i]->mutex);
+        }
+    }
 }

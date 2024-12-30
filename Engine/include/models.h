@@ -15,6 +15,9 @@ typedef struct {
     // For raylib animations:
     ModelAnimation *animations; 
     int animation_count;
+
+    BoundingBox full_box;
+    BoundingBox* mesh_bounding_boxes;
 } ModelInfo;
 
 typedef struct {
