@@ -279,6 +279,7 @@ void update(t_EntitySystem* entity_system) {
 
 #pragma region Rendering
 void DrawHitboxes(t_EntitySystem* entity_system, bool enableHitbox) {
+    bool drawMultipleBoxes=true;
     if (!enableHitbox) return; // Exit if hitbox drawing is disabled
 
     for (int i = 0; i < entity_system->num_entities; ++i) {
@@ -302,14 +303,68 @@ void DrawHitboxes(t_EntitySystem* entity_system, bool enableHitbox) {
         // Draw hitbox based on collision type
         switch (entity->collision_type) {
             case COLLISION_AABB: {
-                // Calculate the min and max points of the AABB
-                Vector3 min = Vector3Subtract(entity->entity3D.position, Vector3Scale(entity->entity3D.scale, 0.5f));
-                Vector3 max = Vector3Add(entity->entity3D.position, Vector3Scale(entity->entity3D.scale, 0.5f));
+                if (entity->entity3D.model_id != -1) {
+                    ModelInfo* minfo = get_model_info(entity->entity3D.model_id);
+                    if (minfo) {
+                        Model model = minfo->model;
 
-                // Draw the wireframe box
-                DrawCubeWires(entity->entity3D.position, entity->entity3D.scale.x, entity->entity3D.scale.y, entity->entity3D.scale.z, hitboxColor);
+                        if (drawMultipleBoxes) {
+                            // Draw multiple bounding boxes (one for each mesh)
+                            int meshCount = model.meshCount;
+                            BoundingBox* meshBoundingBoxes = get_model_mesh_bounding_boxes(model);
+
+                            if (meshBoundingBoxes) {
+                                for (int j = 0; j < meshCount; ++j) {
+                                    BoundingBox modelBox = meshBoundingBoxes[j];
+
+                                    // Scale the bounding box to match the entity's size
+                                    Vector3 size = Vector3Subtract(modelBox.max, modelBox.min);
+                                    Vector3 scaledSize = Vector3Multiply(size, entity->entity3D.scale);
+                                    Vector3 center = Vector3Scale(Vector3Add(modelBox.min, modelBox.max), 0.5f);
+
+                                    // Adjust the bounding box position and scale
+                                    Vector3 offset = Vector3Subtract(entity->entity3D.position, center);
+                                    BoundingBox transformedBox;
+                                    transformedBox.min = Vector3Add(Vector3Subtract(center, Vector3Scale(scaledSize, 0.5f)), offset);
+                                    transformedBox.max = Vector3Add(Vector3Add(center, Vector3Scale(scaledSize, 0.5f)), offset);
+
+                                    // Draw the transformed bounding box
+                                    DrawBoundingBox(transformedBox, hitboxColor);
+                                }
+                                free(meshBoundingBoxes); // Free allocated memory
+                            }
+                        } else {
+                            // Draw a single bounding box covering the whole model
+                            BoundingBox modelBox = get_model_bounding_box(model);
+
+                            // Scale the bounding box to match the entity's size
+                            Vector3 size = Vector3Subtract(modelBox.max, modelBox.min);
+                            Vector3 scaledSize = Vector3Multiply(size, entity->entity3D.scale);
+                            Vector3 center = Vector3Scale(Vector3Add(modelBox.min, modelBox.max), 0.5f);
+
+                            // Adjust the bounding box position and scale
+                            Vector3 offset = Vector3Subtract(entity->entity3D.position, center);
+                            BoundingBox transformedBox;
+                            transformedBox.min = Vector3Add(Vector3Subtract(center, Vector3Scale(scaledSize, 0.5f)), offset);
+                            transformedBox.max = Vector3Add(Vector3Add(center, Vector3Scale(scaledSize, 0.5f)), offset);
+
+                            // Draw the transformed bounding box
+                            DrawBoundingBox(transformedBox, hitboxColor);
+                        }
+                    }
+                } else {
+                    // Fallback to scale-based bounding box
+                    Vector3 boxSize = { entity->entity3D.scale.x, entity->entity3D.scale.y, entity->entity3D.scale.z };
+                    BoundingBox bbox;
+                    bbox.min = Vector3Subtract(entity->entity3D.position, Vector3Scale(boxSize, 0.5f));
+                    bbox.max = Vector3Add(entity->entity3D.position, Vector3Scale(boxSize, 0.5f));
+
+                    DrawBoundingBox(bbox, hitboxColor);
+                }
+
                 break;
             }
+
             case COLLISION_SPHERE: {
                 // Calculate the radius based on the scale (assuming uniform scale)
                 float radius = entity->entity3D.scale.x / 2.0f; // Adjust if non-uniform scaling is used
@@ -372,6 +427,10 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
             continue;
         }
 
+        if (e->on_render) {
+            e->on_render(e);
+        }
+
         if (e->entity3D.model_id == -1) { continue; }
 
         ModelInfo* minfo = get_model_info(e->entity3D.model_id);
@@ -384,13 +443,16 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
         bool withinMinDistance = dist < MIN_DRAW_DISTANCE;
         if (!withinMinDistance && !CheckObjectInFOV(camera, e->entity3D.position, screen_width, screen_height)) continue;
 
-
         float alpha = 1.0f;
-        if (dist > FADE_START_DISTANCE)
-        {
+        if (dist > FADE_START_DISTANCE) {
             float t = (dist - FADE_START_DISTANCE) / (MAX_DRAW_DISTANCE - FADE_START_DISTANCE);
             alpha = 1.0f - t; // linear fade from 1 down to 0
         }
+
+        // Calculate the model's offset using its bounding box
+        BoundingBox bbox = get_model_bounding_box(model);
+        Vector3 bboxCenter = Vector3Scale(Vector3Add(bbox.min, bbox.max), 0.5f);
+        Vector3 adjustedPosition = Vector3Subtract(e->entity3D.position, bboxCenter);
 
         BeginMode3D(camera);
             DrawTextLabels3DBillboard(text_array, camera, MAX_DRAW_DISTANCE);
@@ -404,7 +466,7 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
 
             DrawModelEx(
                 model,
-                e->entity3D.position,
+                adjustedPosition,            // Adjusted position to account for bounding box center
                 e->entity3D.rotation_axis,
                 e->entity3D.rotation,
                 e->entity3D.scale,
@@ -418,6 +480,7 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
     DrawHitboxes(entity_system, true);
     EndMode3D();
 }
+
 #pragma endregion
 
 #ifdef WIN32

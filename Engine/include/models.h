@@ -5,6 +5,7 @@
 
 #include <raylib.h>
 #include <extended_memory.h>
+#include <math.h>
 
 typedef struct {
     const char* file_path;
@@ -31,5 +32,8 @@ ModelInfo* get_model_info(int model_id);
 void remove_model_info(int model_id);
 int get_animation_total_frames(const ModelInfo* info, int animationIndex) ;
 int get_model_animation_count(const ModelInfo* info);
+Vector3 get_model_size(const ModelInfo* info);
+BoundingBox get_model_bounding_box(Model model);
+BoundingBox* get_model_mesh_bounding_boxes(Model model);
 
 #endif

@@ -1,5 +1,60 @@
 #include <player.h>
 
+bool GetRayCollisionWithGround(Ray ray, float groundY, Vector3 *collisionPoint)
+{
+    // Calculate the intersection point
+    if (ray.direction.y != 0)
+    {
+        float t = (groundY - ray.position.y) / ray.direction.y;
+        if (t >= 0) // Ensure the intersection is in front of the ray
+        {
+            collisionPoint->x = ray.position.x + t * ray.direction.x;
+            collisionPoint->y = groundY;
+            collisionPoint->z = ray.position.z + t * ray.direction.z;
+            return true;
+        }
+    }
+    return false;
+}
+
+
+static void DrawLineOnGround(Camera3D camera)
+{
+    static Vector3 startPoint = { 0.0f, 0.0f, 0.0f };
+    static Vector3 endPoint = { 0.0f, 0.0f, 0.0f };
+    static bool hasLine = false;
+
+    // Get the ray from the camera through the mouse position
+    Ray mouseRay = GetMouseRay(GetMousePosition(), camera);
+
+    // Check for ray intersection with the ground plane (y = 0)
+    if (mouseRay.direction.y != 0) // Avoid division by zero
+    {
+        float t = -mouseRay.position.y / mouseRay.direction.y; // Intersection parameter
+        if (t >= 0) // Ensure intersection is in front of the ray's origin
+        {
+            Vector3 intersectionPoint = {
+                mouseRay.position.x + t * mouseRay.direction.x,
+                0.0f, // Ground plane at y = 0
+                mouseRay.position.z + t * mouseRay.direction.z
+            };
+
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            {
+                startPoint = camera.position; // Start point is the camera position
+                endPoint = intersectionPoint; // End point is the intersection point
+                hasLine = true;               // Indicate a valid line exists
+            }
+        }
+    }
+
+    // Draw the line in 3D space
+    if (hasLine)
+    {
+        DrawLine3D(startPoint, endPoint, MAROON); // Line color
+    }
+}
+
 void PlayerUpdate(t_Entity* entity, float deltaTime) {
     Player* player = (Player*) entity->entity_data;
 
@@ -7,8 +62,68 @@ void PlayerUpdate(t_Entity* entity, float deltaTime) {
     ApplyGravity(player, deltaTime);
     UpdatePlayerCamera(player);
 
+    // DrawLineOnClick3D(player, *player->camera);
+
     // printf("Player: %f %f %f ||| ", player->position.x, player->position.y, player->position.z);
     // printf("Camera: %f %f %f\n", player->camera.target.x, player->camera.target.y, player->camera.target.z);
+}
+
+static void PlaceSpheresAtScreenCenter(Camera3D camera)
+{
+    static Vector3 redSpherePosition = { 0.0f, 0.0f, 0.0f };
+    static bool hasRedSphere = false;
+
+    // Calculate the center of the screen
+    Vector2 screenCenter = { GetScreenWidth() / 2.0f, GetScreenHeight() / 2.0f };
+
+    // Cast a ray from the screen center into the 3D world
+    Ray centerRay = GetMouseRay(screenCenter, camera);
+
+    // Calculate ray-plane intersection with ground plane (y = 0)
+    Vector3 blueSpherePosition = { 0.0f, 0.0f, 0.0f }; // Temporary for blue sphere
+    if (centerRay.direction.y != 0) // Avoid division by zero
+    {
+        float t = -centerRay.position.y / centerRay.direction.y; // Intersection parameter
+        if (t >= 0) // Ensure intersection is in front of the ray's origin
+        {
+            blueSpherePosition = (Vector3){
+                centerRay.position.x + t * centerRay.direction.x,
+                0.0f, // Ground plane at y = 0
+                centerRay.position.z + t * centerRay.direction.z
+            };
+
+            // Update the red sphere position if the mouse is clicked
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            {
+                redSpherePosition = blueSpherePosition; // Red sphere follows the intersection
+                hasRedSphere = true;                   // Indicate red sphere exists
+            }
+        }
+    }
+
+    // Draw the blue sphere at the intersection point
+    DrawSphere(blueSpherePosition, 0.1f, BLUE);
+
+    // Draw the red sphere at its position if it exists
+    if (hasRedSphere)
+    {
+        DrawSphere(redSpherePosition, 0.5f, RED);
+    }
+
+    // Debug: Draw the ray from the screen center
+    Vector3 rayEnd = Vector3Add(centerRay.position, Vector3Scale(centerRay.direction, 100.0f));
+    DrawLine3D(centerRay.position, rayEnd, GREEN);
+}
+
+
+void PlayerRender(t_Entity* entity) {
+    Player* player = (Player*) entity->entity_data;
+    
+
+    BeginMode3D(*player->camera);
+    PlaceSpheresAtScreenCenter(*player->camera);
+
+    EndMode3D();
 }
 
 Player InitPlayer(Vector3 startPosition) {
@@ -24,6 +139,7 @@ Player InitPlayer(Vector3 startPosition) {
         100.0f
     );
 
+
     Player* player = (Player*)safe_malloc(sizeof(Player));
     player->player_ent = entity;
     player->position = startPosition;
@@ -33,7 +149,7 @@ Player InitPlayer(Vector3 startPosition) {
     player->pitch = 0.0f;
     player->sensitivity = 0.1f;
     player->velocityY = 0.0f;
-    player->jumpStrength = 7.0f;
+    player->jumpStrength = 10.0f;
     player->isGrounded = true;
 
     player->camera = (Camera*) safe_malloc(sizeof(Camera));
@@ -45,6 +161,7 @@ Player InitPlayer(Vector3 startPosition) {
     player->camera->projection = CAMERA_PERSPECTIVE;
 
     entity->entity_data = player;
+    entity->on_render = PlayerRender;
     entity->update = PlayerUpdate;
     g_engine->camera = player->camera;
 
@@ -52,7 +169,7 @@ Player InitPlayer(Vector3 startPosition) {
 
     return *player;
 }
-
+ // Check for ray collision with a ground plane
 static Vector3 normalize_vector3(Vector3 v) {
     return Vector3NormalizeCustom(v);
 }
@@ -121,9 +238,9 @@ void HandleInput(Player* player, float delta_time) {
 
     // Handle jumping
     if (player->isGrounded && IsKeyPressed(KEY_SPACE)) {
-        printf("Jump\n");
         // Apply an instantaneous jump by setting Y velocity
         player->player_ent->entity3D.velocity.y = player->jumpStrength;
+        player->velocityY = player->jumpStrength;
         player->isGrounded = false;
     }
 
@@ -154,18 +271,13 @@ void HandleInput(Player* player, float delta_time) {
 
 void ApplyGravity(Player *player, float deltaTime) {
 
-    if (!player->isGrounded) {
-        player->velocityY += (GRAVITY.y);
-        player->position.y += player->velocityY * deltaTime;
+    // if (!player->isGrounded) {
+    //     player->velocityY += (-9.81f) * FIXED_TIMESTEP;
+    //     player->position.y += player->velocityY * FIXED_TIMESTEP;
 
-        // Simulate ground collision
-        if (player->position.y <= 0.0f) {
-            player->position.y = 0.0f;
-            player->velocityY = 0.0f;
-            player->isGrounded = true;
-            player->player_ent->is_grounded = true;
-        }
-    }
+    //     printf("VEL: %f\n", player->velocityY);
+    //     printf("VEL: %f %f %f\n", player->position.x, player->position.y, player->position.z);
+    // }
 }
 
 void UpdatePlayerCamera(Player *player) {

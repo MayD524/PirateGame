@@ -23,10 +23,23 @@ typedef struct s_Tag {
 
 // Define different collision types
 typedef enum {
+    COLLISION_NONE,
     COLLISION_AABB,    // Axis-Aligned Bounding Box
     COLLISION_SPHERE,  // Sphere
+    COLLISION_MESH
     // Additional collision types can be added here
 } CollisionType;
+
+typedef struct {
+    Vector3 p1;
+    Vector3 p2;
+    Vector3 p3;
+} Triangle;
+
+typedef struct {
+    Triangle* triangles;
+    int triangleCount;
+} MatoMesh;
 
 typedef struct s_Entity {
     // Common attributes
@@ -45,12 +58,12 @@ typedef struct s_Entity {
     PriorityRank priority_rank;
 
     void (*on_start)(struct s_Entity* entity);
+    void (*on_render)(struct s_Entity* entity);
     void (*update)(struct s_Entity* entity, float delta_time);
     void (*on_collision)(struct s_Entity* other, struct s_Entity* entity);
     void (*on_destroy)(struct s_Entity* entity);
     void (*on_grounded)(struct s_Entity* entity);
     void (*on_airborne)(struct s_Entity* entity);
-
 
     struct {
         Vector3 position;
@@ -67,6 +80,9 @@ typedef struct s_Entity {
     CollisionType collision_type;
 
     // Physics attributes
+    Vector3 angular_velocity; // Angular velocity vector
+    Vector3 torqueAccum;      // Accumulated torque
+    float inverseInertia;     // Inverse of
     Vector3 forceAccum;    // Accumulated forces
     Vector3 acceleration;  // Current acceleration
     float mass;
@@ -74,6 +90,7 @@ typedef struct s_Entity {
     bool is_grounded;
     bool is_static;        // If true, the entity is immovable
     float dampingFactor;
+    MatoMesh mesh;
 } t_Entity;
 
 typedef struct s_Texture {

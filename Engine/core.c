@@ -215,6 +215,8 @@ int add_model_info(const char* file_path) {
         info->animation_count = 0;
     }
 
+    printf("This model has %d meshes\n", info->model.meshCount);
+
     // 5) Store it
     manager->models[index] = info;
     return info->model_id;
@@ -239,6 +241,7 @@ void update_model_animation(ModelInfo* info, int animationIndex, float frame, bo
 }
 
 ModelInfo* get_model_info(int model_id) {
+    if (model_id == -1) { return NULL; }
     ModelManager* manager = g_engine->model_manager;
     for (int i = 0; i < manager->model_count; i++) {
         if (manager->models[i] && manager->models[i]->model_id == model_id) {
@@ -286,4 +289,39 @@ int get_animation_total_frames(const ModelInfo* info, int animationIndex) {
     // raylib's ModelAnimation struct typically has this field:
     //    int frameCount;     // Number of frames stored
     return info->animations[animationIndex].frameCount;
+}
+
+BoundingBox get_model_bounding_box(Model model) {
+    BoundingBox combined_bbox = GetMeshBoundingBox(model.meshes[0]);
+
+    for (int i = 1; i < model.meshCount; i++) {
+        BoundingBox mesh_bbox = GetMeshBoundingBox(model.meshes[i]);
+        combined_bbox.min = Vector3Min(combined_bbox.min, mesh_bbox.min);
+        combined_bbox.max = Vector3Max(combined_bbox.max, mesh_bbox.max);
+    }
+
+    return combined_bbox;
+}
+
+// Function to get an array of bounding boxes for all meshes in a Model
+BoundingBox* get_model_mesh_bounding_boxes(Model model) {
+    BoundingBox* bounding_boxes = (BoundingBox*)malloc(model.meshCount * sizeof(BoundingBox));
+
+    for (int i = 0; i < model.meshCount; i++) {
+        bounding_boxes[i] = GetMeshBoundingBox(model.meshes[i]);
+    }
+
+    return bounding_boxes;
+}
+
+Vector3 get_model_size(const ModelInfo* info) {
+    BoundingBox bbox = get_model_bounding_box(info->model);
+
+    Vector3 size = {
+        bbox.max.x - bbox.min.x,
+        bbox.max.y - bbox.min.y,
+        bbox.max.z - bbox.min.z
+    };
+
+    return size;
 }

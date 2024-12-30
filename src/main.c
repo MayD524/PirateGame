@@ -14,8 +14,9 @@ Engine* g_engine;
 void main_load(Scene* scene) {
     printf("setup!\n");
 
-    InitPlayer((Vector3){ 0.0f, 0.0f, 10.0f});
+    InitPlayer((Vector3){ 0.0f, 0.0f, 0.0f});
 
+    // ToggleBorderlessWindowed();
     DisableCursor();
 }
 
@@ -41,8 +42,13 @@ void main_render(Scene* scene) {
     // DrawText(cam_string, 10, 70, 20, GRAY);
     BeginMode3D(*g_engine->camera);
         CreateGridWithLabels(2.0f, 1.0f, 1000.0f, g_engine->text_labels, GetFontDefault());
-    
     EndMode3D();
+
+    int centerX = GetScreenWidth() / 2;
+    int centerY = GetScreenHeight() / 2;
+
+    DrawLine(centerX - 10, centerY, centerX + 10, centerY, BLACK); // Horizontal line
+    DrawLine(centerX, centerY - 10, centerX, centerY + 10, BLACK); // Vertical line
 }
 
 void main_update(Scene* scene, float deltatime) {
@@ -82,19 +88,22 @@ int main() {
 
     Vector3 test = VEC3_ZERO;
 
-    for (int i =0; i < 10; i+=2) { 
-        for (int j=0; j < 10; ++j) {
-            char *formattedString = NULL;
-            asprintf(&formattedString, "Test:%d",i+j);
-            t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
-            test = Vector3Add(test, (Vector3){ 2.0f, 0.0f, 0.0f});
-            e->update=SillyUpdate;
-        }
-        test = VEC3_ZERO;
-        test.z = i*2;
-    }
+    // for (int i =0; i < 10; i+=2) { 
+    //     for (int j=0; j < 10; ++j) {
+    //         char *formattedString = NULL;
+    //         asprintf(&formattedString, "Test:%d",i+j);
+    //         t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
+    //         test = Vector3Add(test, (Vector3){ 2.0f, 0.0f, 0.0f});
+    //         e->update=SillyUpdate;
+    //     }
+    //     test = VEC3_ZERO;
+    //     test.z = i*2;
+    // }
 
-    // create_entity3D(engine->entity_system, "test11", "./resources/model1k.glb", VEC3_ONE, VEC3_ZERO, PLAYER, FLT_MAX, VEC3_ONE, 100.0f);
+    test.y = 10;
+
+    t_Entity* ent = create_entity3D(engine->entity_system, "test11", "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, Vector3Scale(VEC3_ONE, 1.5f), 100.0f);
+    // ent->is_static = true;
 
     add_scene(engine->scene_manager, scene);
     load_scene(engine->scene_manager, "main");

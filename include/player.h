@@ -27,6 +27,10 @@ typedef struct {
     float velocityY;       // Vertical velocity for jumping
     float jumpStrength;    // Jump strength
     bool isGrounded;       // Check if player is on the ground
+
+    // for testing
+    Vector3 lineStart;
+    Vector3 lineEnd;
 } Player;
 
 

@@ -30,6 +30,9 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
+#define FIXED_TIMESTEP 0.016666f // Approximately 60 updates per second
+
+
 #include <raylib.h>
 #include <extended_memory.h>
 #include <stdio.h>

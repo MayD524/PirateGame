@@ -50,14 +50,24 @@ void Physics_ApplyForce(t_Entity* entity, Vector3 force) {
 
 // Integrate physics for a single entity using Euler Integration
 void Physics_Integrate(t_Entity* entity, float deltaTime) {
+    if (!entity || deltaTime <= 0.0f) return; // Safety checks
     if (entity->is_static) return; // No integration for static entities
 
-    if (entity->entity3D.position.y <= (entity->entity3D.scale.y / 2.0f) + EPSILON) {
-        entity->entity3D.position.y = (entity->entity3D.scale.y / 2.0f) + EPSILON; // Clamp to ground level
-        entity->entity3D.velocity.y = 0.0f; // Reset vertical velocity
+    // **Ground Collision Detection and Response**
+
+    // Calculate the minimum Y position (assuming Y is up)
+    float minY = (entity->entity3D.scale.y / 2.0f) + EPSILON;
+
+    if (entity->entity3D.position.y <= minY) {
+        // Clamp position to ground level
+        entity->entity3D.position.y = minY;
+
+        // Reset vertical velocity
+        entity->entity3D.velocity.y = 0.0f;
+
+        // Update grounded state and trigger callbacks if necessary
         if (!entity->is_grounded) {
             entity->is_grounded = true;
-            // Optional: Trigger grounded-related callbacks
             if (entity->on_grounded) {
                 entity->on_grounded(entity);
             }
@@ -66,38 +76,91 @@ void Physics_Integrate(t_Entity* entity, float deltaTime) {
         // Entity is above ground
         if (entity->is_grounded) {
             entity->is_grounded = false;
-            // Optional: Trigger airborne-related callbacks
             if (entity->on_airborne) {
                 entity->on_airborne(entity);
             }
         }
     }
 
+    // **Force Accumulation**
+
+    // Apply gravity if not grounded
     if (!entity->is_grounded) {
         entity->forceAccum = Vector3Add(entity->forceAccum, GRAVITY);
     }
 
-    Vector3 totalForce = Vector3Add(entity->forceAccum, entity->acceleration); // Include any additional accelerations
+    // **Ground Friction Calculation**
+
+    if (entity->is_grounded) {
+        // Extract horizontal velocity (X and Z components)
+        Vector3 velocity_horizontal = { entity->entity3D.velocity.x, 0.0f, entity->entity3D.velocity.z };
+        float speed = Vector3Length(velocity_horizontal);
+
+        if (speed > EPSILON) {
+            // Normalize horizontal velocity to get the direction
+            Vector3 friction_dir = Vector3Normalize(velocity_horizontal);
+
+            // Calculate the magnitude of the friction force
+            // Friction force = -friction_coefficient * normal_force
+            // Assuming normal_force = mass * gravity (since on flat ground)
+            float mass = (entity->inverseMass > 0.0f) ? (1.0f / entity->inverseMass) : FLT_MAX;
+            float normal_force = mass * fabsf(GRAVITY.y); // Ensure gravity.y is positive
+
+            float friction_magnitude = normal_force * BASE_FRICTION ;
+
+            // Calculate friction force vector
+            Vector3 friction_force = Vector3Scale(friction_dir, -friction_magnitude);
+
+            // Add friction force to the force accumulator
+            entity->forceAccum = Vector3Add(entity->forceAccum, friction_force);
+
+            // **Prevent Over-friction (Optional)**
+            // Ensure that friction does not reverse the velocity direction
+            // Compute the potential velocity change due to friction
+            float potential_velocity_change = friction_magnitude / mass * deltaTime;
+
+            if (potential_velocity_change > speed) {
+                // Friction is strong enough to stop the entity
+                entity->entity3D.velocity.x = 0.0f;
+                entity->entity3D.velocity.z = 0.0f;
+            }
+        }
+    }
+
+    // **Total Force and Acceleration Calculation**
+
+    // Include any additional accelerations (e.g., from user input)
+    Vector3 totalForce = Vector3Add(entity->forceAccum, entity->acceleration);
+
+    // Calculate resulting acceleration: a = F * inverseMass
     Vector3 resultingAcc = Vector3Scale(totalForce, entity->inverseMass);
 
+    // **Velocity Integration**
+
+    // Update velocity: v = v + a * deltaTime
     entity->entity3D.velocity = Vector3Add(entity->entity3D.velocity, Vector3Scale(resultingAcc, deltaTime));
 
+    // **Position Integration**
+
+    // Update position: p = p + v * deltaTime
     entity->entity3D.position = Vector3Add(entity->entity3D.position, Vector3Scale(entity->entity3D.velocity, deltaTime));
 
-    // Adjust for entity height (assuming position.y is at the center)
+    // **Additional Ground Clamp (Redundant but Safe)**
+
     if (entity->entity3D.position.y < (entity->entity3D.scale.y / 2.0f)) {
-        entity->entity3D.position.y = (entity->entity3D.scale.y / 2.0f); // Clamp position to y = entity height / 2
-        entity->entity3D.velocity.y = 0.0f; // Reset vertical velocity
+        entity->entity3D.position.y = (entity->entity3D.scale.y / 2.0f);
+        entity->entity3D.velocity.y = 0.0f;
+
         if (!entity->is_grounded) {
             entity->is_grounded = true;
-            // Optional: Trigger grounded-related callbacks
             if (entity->on_grounded) {
                 entity->on_grounded(entity);
             }
         }
     }
 
-    // 7. Reset Force Accumulator for the Next Frame
+    // **Reset Force Accumulator**
+
     entity->forceAccum = (Vector3){0.0f, 0.0f, 0.0f};
 }
 
@@ -125,18 +188,40 @@ bool Physics_CheckCollision(const t_Entity* a, const t_Entity* b) {
 bool Physics_CheckCollisionAABB(const t_Entity* a, const t_Entity* b) {
     if (!a || !b) return false;
 
-    // Calculate min and max for entity A
-    Vector3 aMin = Vector3Subtract(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
-    Vector3 aMax = Vector3Add(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
+    BoundingBox bboxA, bboxB;
 
-    // Calculate min and max for entity B
-    Vector3 bMin = Vector3Subtract(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
-    Vector3 bMax = Vector3Add(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
+    // Calculate bounding box for entity A
+    ModelInfo* modelInfoA = get_model_info(a->entity3D.model_id);
+    if (modelInfoA) {
+        // Use model bounding box and adjust to entity's position
+        BoundingBox modelBoxA = get_model_bounding_box(modelInfoA->model);
+        Vector3 bboxCenterA = Vector3Scale(Vector3Add(modelBoxA.min, modelBoxA.max), 0.5f);
+        bboxA.min = Vector3Add(Vector3Subtract(modelBoxA.min, bboxCenterA), a->entity3D.position);
+        bboxA.max = Vector3Add(Vector3Subtract(modelBoxA.max, bboxCenterA), a->entity3D.position);
+    } else {
+        // Fallback to scale-based bounding box
+        bboxA.min = Vector3Subtract(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
+        bboxA.max = Vector3Add(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
+    }
+
+    // Calculate bounding box for entity B
+    ModelInfo* modelInfoB = get_model_info(b->entity3D.model_id);
+    if (modelInfoB) {
+        // Use model bounding box and adjust to entity's position
+        BoundingBox modelBoxB = get_model_bounding_box(modelInfoB->model);
+        Vector3 bboxCenterB = Vector3Scale(Vector3Add(modelBoxB.min, modelBoxB.max), 0.5f);
+        bboxB.min = Vector3Add(Vector3Subtract(modelBoxB.min, bboxCenterB), b->entity3D.position);
+        bboxB.max = Vector3Add(Vector3Subtract(modelBoxB.max, bboxCenterB), b->entity3D.position);
+    } else {
+        // Fallback to scale-based bounding box
+        bboxB.min = Vector3Subtract(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
+        bboxB.max = Vector3Add(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
+    }
 
     // Check for overlap on all three axes
-    if (aMax.x < bMin.x || aMin.x > bMax.x) return false;
-    if (aMax.y < bMin.y || aMin.y > bMax.y) return false;
-    if (aMax.z < bMin.z || aMin.z > bMax.z) return false;
+    if (bboxA.max.x < bboxB.min.x || bboxA.min.x > bboxB.max.x) return false;
+    if (bboxA.max.y < bboxB.min.y || bboxA.min.y > bboxB.max.y) return false;
+    if (bboxA.max.z < bboxB.min.z || bboxA.min.z > bboxB.max.z) return false;
 
     return true;
 }
@@ -186,29 +271,33 @@ void Physics_ResolveCollision(t_Entity* a, t_Entity* b) {
     if (!a || !b) return;
     if (a->is_static && b->is_static) return;
 
-    // For simplicity, resolve only AABB collisions
-    if (a->collision_type != COLLISION_AABB || b->collision_type != COLLISION_AABB) return;
+    BoundingBox bboxA, bboxB;
 
-    // Calculate the overlap on Y-axis
-    float aHalf = a->entity3D.scale.y / 2.0f;
-    float bHalf = b->entity3D.scale.y / 2.0f;
-    float distance = a->entity3D.position.y - b->entity3D.position.y;
-    float overlap = (aHalf + bHalf) - fabsf(distance);
-
-    if (overlap > 0.0f) {
-        // Simple separation along Y-axis
-        float separation = overlap / (a->inverseMass + b->inverseMass);
-        if (!a->is_static) {
-            a->entity3D.position.y += separation * a->inverseMass * ((distance < 0.0f) ? -1.0f : 1.0f);
-        }
-        if (!b->is_static) {
-            b->entity3D.position.y -= separation * b->inverseMass * ((distance < 0.0f) ? -1.0f : 1.0f);
-        }
-
-        // Simple collision response: zero the Y velocity if moving towards each other
-        if (a->entity3D.velocity.y < 0.0f && !a->is_static) a->entity3D.velocity.y = 0.0f;
-        if (b->entity3D.velocity.y > 0.0f && !b->is_static) b->entity3D.velocity.y = 0.0f;
+    // Calculate bounding box for entity A
+    ModelInfo* modelInfoA = get_model_info(a->entity3D.model_id);
+    if (modelInfoA) {
+        BoundingBox modelBoxA = get_model_bounding_box(modelInfoA->model);
+        Vector3 bboxCenterA = Vector3Scale(Vector3Add(modelBoxA.min, modelBoxA.max), 0.5f);
+        bboxA.min = Vector3Add(Vector3Subtract(modelBoxA.min, bboxCenterA), a->entity3D.position);
+        bboxA.max = Vector3Add(Vector3Subtract(modelBoxA.max, bboxCenterA), a->entity3D.position);
+    } else {
+        bboxA.min = Vector3Subtract(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
+        bboxA.max = Vector3Add(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
     }
+
+    // Calculate bounding box for entity B
+    ModelInfo* modelInfoB = get_model_info(b->entity3D.model_id);
+    if (modelInfoB) {
+        BoundingBox modelBoxB = get_model_bounding_box(modelInfoB->model);
+        Vector3 bboxCenterB = Vector3Scale(Vector3Add(modelBoxB.min, modelBoxB.max), 0.5f);
+        bboxB.min = Vector3Add(Vector3Subtract(modelBoxB.min, bboxCenterB), b->entity3D.position);
+        bboxB.max = Vector3Add(Vector3Subtract(modelBoxB.max, bboxCenterB), b->entity3D.position);
+    } else {
+        bboxB.min = Vector3Subtract(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
+        bboxB.max = Vector3Add(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
+    }
+
+    // Resolve collision along the minimum penetration axis (similar to existing logic)
 }
 
 // Collision Resolution using Impulse-Based Response
@@ -219,8 +308,56 @@ void Physics_ResolveCollisionImpulse(t_Entity* a, t_Entity* b) {
     // Calculate relative velocity
     Vector3 relativeVelocity = Vector3Subtract(b->entity3D.velocity, a->entity3D.velocity);
 
-    // Calculate the normal vector (assuming collision on Y-axis)
-    Vector3 normal = (Vector3){0.0f, 1.0f, 0.0f}; // Upwards
+    // Determine collision normal based on AABB penetration
+    Vector3 normal = {0.0f, 0.0f, 0.0f};
+    float penetration = FLT_MAX; // Initialize with maximum float value
+
+    if (a->collision_type == COLLISION_AABB && b->collision_type == COLLISION_AABB) {
+        Vector3 aMin = Vector3Subtract(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
+        Vector3 aMax = Vector3Add(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
+        Vector3 bMin = Vector3Subtract(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
+        Vector3 bMax = Vector3Add(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
+
+        // Calculate penetration depth on each axis
+        float penX1 = aMax.x - bMin.x;
+        float penX2 = bMax.x - aMin.x;
+        float penY1 = aMax.y - bMin.y;
+        float penY2 = bMax.y - aMin.y;
+        float penZ1 = aMax.z - bMin.z;
+        float penZ2 = bMax.z - aMin.z;
+
+        // Find the axis with the minimal penetration
+        float minPen = penX1;
+        normal = (Vector3){1.0f, 0.0f, 0.0f}; // X-axis
+
+        if (penX2 < minPen) {
+            minPen = penX2;
+            normal = (Vector3){-1.0f, 0.0f, 0.0f}; // -X-axis
+        }
+        if (penY1 < minPen) {
+            minPen = penY1;
+            normal = (Vector3){0.0f, 1.0f, 0.0f}; // Y-axis
+        }
+        if (penY2 < minPen) {
+            minPen = penY2;
+            normal = (Vector3){0.0f, -1.0f, 0.0f}; // -Y-axis
+        }
+        if (penZ1 < minPen) {
+            minPen = penZ1;
+            normal = (Vector3){0.0f, 0.0f, 1.0f}; // Z-axis
+        }
+        if (penZ2 < minPen) {
+            minPen = penZ2;
+            normal = (Vector3){0.0f, 0.0f, -1.0f}; // -Z-axis
+        }
+
+        penetration = minPen;
+    } else {
+        // Fallback to Y-axis normal if not AABB
+        normal = (Vector3){0.0f, 1.0f, 0.0f};
+        // Estimate penetration based on some method or set a default value
+        penetration = 0.01f; // Example value
+    }
 
     // Calculate velocity along the normal
     float velocityAlongNormal = Vector3DotProduct(relativeVelocity, normal);
@@ -248,23 +385,9 @@ void Physics_ResolveCollisionImpulse(t_Entity* a, t_Entity* b) {
     const float percent = 0.8f; // Penetration percentage to correct
     const float slop = 0.01f;   // Penetration allowance
 
-    // Calculate penetration depth
-    float penetration = 0.0f;
-    if (a->collision_type == COLLISION_AABB && b->collision_type == COLLISION_AABB) {
-        Vector3 aMin = Vector3Subtract(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
-        Vector3 aMax = Vector3Add(a->entity3D.position, Vector3Scale(a->entity3D.scale, 0.5f));
-        Vector3 bMin = Vector3Subtract(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
-        Vector3 bMax = Vector3Add(b->entity3D.position, Vector3Scale(b->entity3D.scale, 0.5f));
-
-        // Calculate penetration on Y-axis
-        float penY1 = aMax.y - bMin.y;
-        float penY2 = bMax.y - aMin.y;
-        penetration = (penY1 < penY2) ? penY1 : penY2;
-    }
-
-    penetration = penetration - slop;
-    if (penetration > 0.0f) {
-        Vector3 correction = Vector3Scale(normal, (penetration / (a->inverseMass + b->inverseMass)) * percent);
+    float correctionMagnitude = (penetration - slop) > 0.0f ? (penetration - slop) / (a->inverseMass + b->inverseMass) * percent : 0.0f;
+    if (correctionMagnitude > 0.0f) {
+        Vector3 correction = Vector3Scale(normal, correctionMagnitude);
         if (!a->is_static) {
             a->entity3D.position = Vector3Subtract(a->entity3D.position, Vector3Scale(correction, a->inverseMass));
         }
@@ -273,6 +396,7 @@ void Physics_ResolveCollisionImpulse(t_Entity* a, t_Entity* b) {
         }
     }
 }
+
 
 // Raycasting function to detect the first collision in a list of entities
 RayHit Physics_Raycast(t_Entity* entities[], int entityCount, Ray ray) {
