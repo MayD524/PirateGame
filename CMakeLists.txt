@@ -5,12 +5,13 @@ project(RTSGame C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+
 # Output directory
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/build)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 # Debugging flags
-set(CMAKE_C_FLAGS_DEBUG "-g -O0")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+set(CMAKE_C_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
 
 # Enable FetchContent module
 include(FetchContent)
@@ -62,6 +63,9 @@ target_link_libraries(rts PRIVATE
     OpenMP::OpenMP_C  # Link OpenMP for C
 )
 
+# Debug-specific definitions
+target_compile_definitions(rts PRIVATE $<$<CONFIG:DEBUG>:DEBUG_MODE=1>)
+
 # Post-build: Copy Lua scripts to the build directory
 add_custom_command(TARGET rts POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/scripts
@@ -89,3 +93,10 @@ add_custom_target(memcheck
     DEPENDS rts
     COMMENT "Running Valgrind for memory checks..."
 )
+
+# Print configuration summary at configuration time
+message(STATUS "Project Name: ${PROJECT_NAME}")
+message(STATUS "C Compiler: ${CMAKE_C_COMPILER}")
+message(STATUS "C++ Compiler: ${CMAKE_CXX_COMPILER}")
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Output Directory: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")

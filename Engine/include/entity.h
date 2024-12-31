@@ -93,14 +93,6 @@ void DrawHitboxes(t_EntitySystem* entity_system, bool enableHitbox);
 void print_movement(const t_Entity* entity);
 bool are_entities_colliding(const t_Entity* entity_a, const t_Entity* entity_b);
 
-void print_tags(const t_Entity* entity);
-void add_tag(t_Entity* entity, const char* tag);
-const char** get_tags(const t_Entity* entity);
-void remove_tag_at(t_Entity* entity, int index);
-void remove_tag(t_Entity* entity, const char* tag);
-int has_tag(const t_Entity* entity, const char* tag);
-void remove_all_tags(t_Entity* entity);
-
 Rectangle get_entity_source(const t_Entity* entity);
 Rectangle get_entity_destination(const t_Entity* entity);
 

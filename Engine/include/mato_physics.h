@@ -1,7 +1,10 @@
 // physics.h
+#pragma once
+
 #ifndef PHYSICS_H
 #define PHYSICS_H
 
+#include <immintrin.h> // For AVX/SSE intrinsics
 #include <game_entity.h>
 #include <models.h>
 #include <raylib.h>
@@ -12,6 +15,11 @@
 // Define gravitational constant (modifiable as needed)
 #define GRAVITY_Y -981.0f
 #define GRAVITY (Vector3){0.0f, GRAVITY_Y, 0.0f}
+
+extern const __m128 HALF_PS;
+extern const __m128 ZERO_PS;
+extern const __m128 ONE_PS;
+extern const __m128 NEGATE_PS;
 
 
 #define BASE_FRICTION 0.04f
@@ -37,6 +45,7 @@ void Physics_Integrate(t_Entity* entity, float deltaTime);
 bool Physics_CheckCollision(const t_Entity* a, const t_Entity* b);
 
 // Specific Collision Detection Functions
+bool Physics_CheckCollisionAABB_SIMD(const t_Entity* a, const t_Entity* b);
 bool Physics_CheckCollisionAABB(const t_Entity* a, const t_Entity* b);
 bool Physics_CheckCollisionSphere(const t_Entity* a, const t_Entity* b);
 

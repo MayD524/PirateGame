@@ -55,7 +55,7 @@ WindowInformation* create_window_information(int width, int height, const char* 
 }
 
 void initialize_model_manager(ModelManager* manager) {
-    manager->current_model_id = 1; // Start model IDs at 1
+    manager->current_model_id = 0;
     manager->model_capacity = 10; // Initial capacity
     manager->model_count = 0;
     manager->models = safe_malloc(manager->model_capacity * sizeof(ModelInfo*));
@@ -181,7 +181,7 @@ int add_model_info(const char* file_path) {
     int index;
     ModelInfo* info = safe_malloc(sizeof(ModelInfo));
     info->file_path = strdup(file_path);
-    info->model_id = manager->current_model_id++;
+    info->model_id = manager->current_model_id;
 
     info->model = LoadModel(file_path);  
     if (info->model.meshCount == 0) {
@@ -204,7 +204,7 @@ int add_model_info(const char* file_path) {
             manager->free_list = safe_realloc(manager->free_list,
                 manager->model_capacity * sizeof(int));
         }
-        index = manager->model_count++;
+        index = manager->model_count;
     }
 
     info->full_box = get_model_bounding_box(info->model);
@@ -223,6 +223,8 @@ int add_model_info(const char* file_path) {
     printf("This model has %d meshes\n", info->model.meshCount);
 
     // 5) Store it
+    manager->current_model_id++;
+    manager->model_count++;
     manager->models[index] = info;
     return info->model_id;
 }
@@ -246,14 +248,10 @@ void update_model_animation(ModelInfo* info, int animationIndex, float frame, bo
 }
 
 ModelInfo* get_model_info(int model_id) {
-    if (model_id == -1) { return NULL; }
-    ModelManager* manager = g_engine->model_manager;
-    for (int i = 0; i < manager->model_count; i++) {
-        if (manager->models[i] && manager->models[i]->model_id == model_id) {
-            return manager->models[i];
-        }
+    if (model_id == -1 || model_id > g_engine->model_manager->current_model_id) {
+        return NULL;
     }
-    return NULL; // ModelInfo not found
+    return g_engine->model_manager->models[model_id];
 }
 
 void remove_model_info(int model_id) {

@@ -5,6 +5,24 @@
 #include <math.h>
 #include <float.h>
 
+#ifdef _MSC_VER
+    __declspec(align(16)) const __m128 HALF_PS  = {0.5f, 0.5f, 0.5f, 0.0f};
+    __declspec(align(16)) const __m128 ZERO_PS  = {0.0f, 0.0f, 0.0f, 0.0f};
+    __declspec(align(16)) const __m128 ONE_PS   = {1.0f, 1.0f, 1.0f, 1.0f};
+    __declspec(align(16)) const __m128 NEGATE_PS = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
+#elif defined(__GNUC__) || defined(__clang__)
+    const __m128 HALF_PS  __attribute__((aligned(16))) = {0.5f, 0.5f, 0.5f, 0.0f};
+    const __m128 ZERO_PS  __attribute__((aligned(16))) = {0.0f, 0.0f, 0.0f, 0.0f};
+    const __m128 ONE_PS   __attribute__((aligned(16))) = {1.0f, 1.0f, 1.0f, 1.0f};
+    const __m128 NEGATE_PS __attribute__((aligned(16))) = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
+#else
+    const __m128 HALF_PS  = {0.5f, 0.5f, 0.5f, 0.0f};
+    const __m128 ZERO_PS  = {0.0f, 0.0f, 0.0f, 0.0f};
+    const __m128 ONE_PS   = {1.0f, 1.0f, 1.0f, 1.0f};
+    const __m128 NEGATE_PS = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
+#endif
+
+
 // Helper function to calculate inverse mass
 static float CalculateInverseMass(float mass, bool is_static) {
     if (is_static || mass <= 0.0f) return 0.0f;
@@ -174,9 +192,11 @@ void Physics_Integrate(t_Entity* entity, float deltaTime) {
 bool Physics_CheckCollision(const t_Entity* a, const t_Entity* b) {
     if (!a || !b) return false;
 
+    if ((a->is_static || b->is_static) || (has_tag(a, "NO_COLLISION") != -1 || has_tag(b, "NO_COLLISION") != -1)) return false;
+
     // Determine collision type combinations
     if (a->collision_type == COLLISION_AABB && b->collision_type == COLLISION_AABB) {
-        return Physics_CheckCollisionAABB(a, b);
+        return Physics_CheckCollisionAABB_SIMD(a, b);
     }
     else if (a->collision_type == COLLISION_SPHERE && b->collision_type == COLLISION_SPHERE) {
         return Physics_CheckCollisionSphere(a, b);
@@ -185,8 +205,77 @@ bool Physics_CheckCollision(const t_Entity* a, const t_Entity* b) {
     else {
         // Handle mixed collision types or unsupported types
         // For simplicity, default to AABB collision
-        return Physics_CheckCollisionAABB(a, b);
+        return Physics_CheckCollisionAABB_SIMD(a, b);
     }
+}
+
+static inline void ComputeTransformedBoundingBox_SIMD(const t_Entity* entity, __m128* bbox_min, __m128* bbox_max) {
+    // Retrieve the Raylib Model
+    ModelInfo* minfo = get_model_info(entity->entity3D.model_id);
+
+    // Initialize entity position vector
+    __m128 entityPos = _mm_setr_ps(
+        entity->entity3D.position.x,
+        entity->entity3D.position.y,
+        entity->entity3D.position.z,
+        0.0f // w-component unused
+    );
+
+    // Load scaling vector
+    __m128 scale = _mm_setr_ps(
+        entity->entity3D.scale.x,
+        entity->entity3D.scale.y,
+        entity->entity3D.scale.z,
+        1.0f // w-component set to 1.0f
+    );
+
+    if (minfo) {
+        // Load bounding box min and max
+        __m128 boxMin = _mm_setr_ps(
+            minfo->full_box.min.x,
+            minfo->full_box.min.y,
+            minfo->full_box.min.z,
+            0.0f
+        );
+        __m128 boxMax = _mm_setr_ps(
+            minfo->full_box.max.x,
+            minfo->full_box.max.y,
+            minfo->full_box.max.z,
+            0.0f
+        );
+
+        // Compute scaled bounding box min and max
+        __m128 scaledBoxMin = _mm_mul_ps(boxMin, scale);
+        __m128 scaledBoxMax = _mm_mul_ps(boxMax, scale);
+
+        // Compute the final bounding boxes by adding the entity position
+        *bbox_min = _mm_add_ps(scaledBoxMin, entityPos);
+        *bbox_max = _mm_add_ps(scaledBoxMax, entityPos);
+    } else {
+        // Use the entity's position and scale to define the bounding box
+        __m128 halfScale = _mm_mul_ps(scale, _mm_set_ps1(0.5f));
+        *bbox_min = _mm_sub_ps(entityPos, halfScale);
+        *bbox_max = _mm_add_ps(entityPos, halfScale);
+    }
+}
+
+bool Physics_CheckCollisionAABB_SIMD(const t_Entity* a, const t_Entity* b) {
+    if (a == NULL || b == NULL) return false;
+
+    __m128 bboxA_min, bboxA_max;
+    __m128 bboxB_min, bboxB_max;
+
+    // Compute transformed bounding boxes for both entities
+    ComputeTransformedBoundingBox_SIMD(a, &bboxA_min, &bboxA_max);
+    ComputeTransformedBoundingBox_SIMD(b, &bboxB_min, &bboxB_max);
+
+    // Check for separation on any axis using SIMD
+    __m128 cmpMin = _mm_cmpgt_ps(bboxA_min, bboxB_max); // A_min > B_max
+    __m128 cmpMax = _mm_cmpgt_ps(bboxB_min, bboxA_max); // B_min > A_max
+    __m128 cmpResult = _mm_or_ps(cmpMin, cmpMax);
+
+    // Extract the comparison results: if any axis does not overlap, return false
+    return (_mm_movemask_ps(cmpResult) == 0);
 }
 
 // AABB Collision Detection
@@ -315,7 +404,6 @@ void Physics_ResolveCollision(t_Entity* a, t_Entity* b) {
 
     // Simple separation along Y-axis (for demonstration)
     float penetration = 0.0f;
-    Vector3 normal = {0.0f, 1.0f, 0.0f}; // Default normal
 
     if (bboxA.max.y > bboxB.min.y && bboxA.min.y < bboxB.max.y) {
         // Calculate penetration depth

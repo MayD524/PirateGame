@@ -94,9 +94,9 @@ int main() {
     };
 
     Vector3 test = VEC3_ZERO;
-
-    for (int i = 0; i < 3; ++i) { 
-        for (int j=0; j < 3; ++j) {
+    
+    for (int i = 0; i < 25; ++i) { 
+        for (int j=0; j < 25; ++j) {
             char *formattedString = NULL;
             asprintf(&formattedString, "Test:%d",i+j);
             t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);

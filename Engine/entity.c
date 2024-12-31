@@ -417,6 +417,8 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
     float screen_width = GetScreenWidth();
     float screen_height = GetScreenHeight();
 
+    int total_drawn = 0;
+
     for (int i = 0; i < entity_system->num_entities; ++i) {
         t_Entity* e = entity_system->entities[i];
 
@@ -460,7 +462,7 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
             Color tintedColor = originalColor;
             tintedColor.a = (unsigned char)(255 * alpha);
             model.materials[0].maps[MATERIAL_MAP_DIFFUSE].color = tintedColor;
-
+            total_drawn++;
             DrawModelEx(
                 model,
                 adjustedPosition,            // Adjusted position to account for bounding box center
@@ -472,6 +474,13 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
         EndMode3D();
         
     }
+
+    char DrawnString[100];
+    snprintf(DrawnString, 100, "Entities Drawn: %d", total_drawn);
+    DrawText(DrawnString, 10, 35, 20, GRAY);
+
+    snprintf(DrawnString, 100, "Total Entities: %d", entity_system->num_entities);
+    DrawText(DrawnString, 10, 60, 20, GRAY);
 
     BeginMode3D(camera);
     DrawHitboxes(entity_system, true);
