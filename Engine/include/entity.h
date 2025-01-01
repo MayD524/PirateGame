@@ -24,11 +24,11 @@
     #include <unistd.h>
 #endif
 
-#define DEBUG_ENABLE_DRAW_HITBOXES
+// #define DEBUG_ENABLE_DRAW_HITBOXES
 
 #define MIN_DRAW_DISTANCE         5.0f
-#define FADE_START_DISTANCE      80.0f
-#define MAX_DRAW_DISTANCE       100.0f
+#define FADE_START_DISTANCE      60.0f
+#define MAX_DRAW_DISTANCE       80.0f
 
 // LOD thresholds (you can tweak these)
 #define LOD0_DISTANCE           15.0f

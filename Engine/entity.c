@@ -421,8 +421,7 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
         float dist = Vector3Distance(e->entity3D.position, camera.position);
         float alpha = 1.0f;
 
-        #define DEBUG_DONT_HIDE
-        #ifndef DEBUG_DONT_HIDE
+        #ifndef DEBUG_ALWAYS_RENDER_ACTIVE
             if (dist > MAX_DRAW_DISTANCE || dist < 0) continue; 
 
             bool withinMinDistance = dist < MIN_DRAW_DISTANCE;

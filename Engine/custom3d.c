@@ -36,30 +36,37 @@ void FlipImageVertical(Image *image) {
 }
 
 // Function to create a texture from rendered text
-static Texture2D CreateTextTexture(Font font, const char *text, Color color, int labelIndex) {
+static Texture2D CreateTextTexture(Font font, const char *text, Color color, float fontSize, float padding) {
     // Measure text size
-    Vector2 textSize = MeasureTextEx(font, text, font.baseSize, 1.0f);
+    Vector2 textSize = MeasureTextEx(font, text, fontSize, 1.0f);
 
     // Calculate texture size with padding
-    int width = (int)textSize.x + 10;
-    int height = (int)textSize.y + 10;
+    int width = (int)(textSize.x + 2 * padding);
+    int height = (int)(textSize.y + 2 * padding);
 
     // Create a RenderTexture2D with the calculated size
     RenderTexture2D target = LoadRenderTexture(width, height);
 
     // Begin drawing to the RenderTexture
     BeginTextureMode(target);
-        ClearBackground((Color){ 0, 0, 0, 0 }); // Transparent background
-        DrawTextEx(font, text, (Vector2){ 5, 5 }, font.baseSize, 1.0f, color);
+        BeginBlendMode(BLEND_ALPHA);
+            ClearBackground((Color){ 0, 0, 0, 0 }); // Transparent background
+            DrawTextEx(font, text, (Vector2){ padding, padding }, fontSize, 1.0f, color);
+        EndBlendMode();
     EndTextureMode();
 
     // Get the image from the RenderTexture
     Image img = LoadImageFromTexture(target.texture);
 
-    // **Flip the image vertically to correct the orientation**
+    // Flip the image vertically to correct orientation
     FlipImageVertical(&img);
 
-    // Create a new Texture2D from the Image
+    // Ensure the image supports an alpha channel
+    if (img.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
+        ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    }
+
+    // Create a Texture2D from the Image
     Texture2D textTexture = LoadTextureFromImage(img);
 
     // Unload the Image and RenderTexture
@@ -168,7 +175,7 @@ void DrawTextLabels3DBillboard(TextLabelArray *array, Camera3D camera, float max
                 UnloadTexture(label->texture);
             }
             // Use a contrasting color like WHITE or another suitable color
-            label->texture = CreateTextTexture(GetFontDefault(), label->text, BLACK, i);
+            label->texture = CreateTextTexture(GetFontDefault(), label->text, BLACK, i, 10.0f);
             label->dirty = false;
         }
 
@@ -269,33 +276,33 @@ bool IsPointInView(Camera3D camera, Vector3 point) {
 
 void CreateGridWithLabels(float spacing, float scale, float maxDistance, TextLabelArray *labelArray, Font font) {
     // Add "0 m" label at the origin
-    // AddTextLabel(labelArray, "0 m", (Vector3){0.0f, 0.1f, 0.0f}, font);
+    AddTextLabel(labelArray, "0 m", (Vector3){0.0f, 0.1f, 0.0f}, font);
 
     Draw3DGrid(spacing, scale, maxDistance);
 
-    // for(float i = spacing; i <= maxDistance; i += spacing) {
-    //     // Labels for X-axis lines (positive direction)
-    //     char labelTextX[64];
-    //     snprintf(labelTextX, sizeof(labelTextX), "%.0f m", i);
-    //     Vector3 labelPosX = { i * scale, 0.1f, 0.0f }; // Slightly above the floor
-    //     AddTextLabel(labelArray, labelTextX, labelPosX, font);
+    for(float i = spacing; i <= maxDistance; i += spacing) {
+        // Labels for X-axis lines (positive direction)
+        char labelTextX[64];
+        snprintf(labelTextX, sizeof(labelTextX), "%.0f m", i);
+        Vector3 labelPosX = { i * scale, 0.1f, 0.0f }; // Slightly above the floor
+        AddTextLabel(labelArray, labelTextX, labelPosX, font);
 
-    //     // Labels for X-axis lines (negative direction)
-    //     char labelTextNegX[64];
-    //     snprintf(labelTextNegX, sizeof(labelTextNegX), "%.0f m", i);
-    //     Vector3 labelPosNegX = { -i * scale, 0.1f, 0.0f };
-    //     AddTextLabel(labelArray, labelTextNegX, labelPosNegX, font);
+        // Labels for X-axis lines (negative direction)
+        char labelTextNegX[64];
+        snprintf(labelTextNegX, sizeof(labelTextNegX), "%.0f m", i);
+        Vector3 labelPosNegX = { -i * scale, 0.1f, 0.0f };
+        AddTextLabel(labelArray, labelTextNegX, labelPosNegX, font);
 
-    //     // Labels for Z-axis lines (positive direction)
-    //     char labelTextZ[64];
-    //     snprintf(labelTextZ, sizeof(labelTextZ), "%.0f m", i);
-    //     Vector3 labelPosZ = { 0.0f, 0.1f, i * scale };
-    //     AddTextLabel(labelArray, labelTextZ, labelPosZ, font);
+        // Labels for Z-axis lines (positive direction)
+        char labelTextZ[64];
+        snprintf(labelTextZ, sizeof(labelTextZ), "%.0f m", i);
+        Vector3 labelPosZ = { 0.0f, 0.1f, i * scale };
+        AddTextLabel(labelArray, labelTextZ, labelPosZ, font);
 
-    //     // Labels for Z-axis lines (negative direction)
-    //     char labelTextNegZ[64];
-    //     snprintf(labelTextNegZ, sizeof(labelTextNegZ), "%.0f m", i);
-    //     Vector3 labelPosNegZ = { 0.0f, 0.1f, -i * scale };
-    //     AddTextLabel(labelArray, labelTextNegZ, labelPosNegZ, font);
-    // }
+        // Labels for Z-axis lines (negative direction)
+        char labelTextNegZ[64];
+        snprintf(labelTextNegZ, sizeof(labelTextNegZ), "%.0f m", i);
+        Vector3 labelPosNegZ = { 0.0f, 0.1f, -i * scale };
+        AddTextLabel(labelArray, labelTextNegZ, labelPosNegZ, font);
+    }
 }
