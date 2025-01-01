@@ -14,6 +14,7 @@
 #include <macros.h>
 #include <game_entity.h>
 #include <mato_physics.h>
+#include <entity_system.h>
 #include <SpatialGrid3D.h>
 #include <extended_memory.h>
 #include <models.h>
@@ -22,6 +23,8 @@
 #ifdef __linux__
     #include <unistd.h>
 #endif
+
+#define DEBUG_ENABLE_DRAW_HITBOXES
 
 #define MIN_DRAW_DISTANCE         5.0f
 #define FADE_START_DISTANCE      80.0f
@@ -39,40 +42,6 @@ static const Vector2 VEC2_ZERO = { 0.0f, 0.0f };
 static const Vector2 VEC2_ONE = { 1.0f, 1.0f };
 static const Vector3 VEC3_ZERO = { 0.0f, 0.0f, 0.0f };
 static const Vector3 VEC3_ONE = { 1.0f, 1.0f, 1.0f };
-
-#define INITIAL_ENTITY_CAPACITY 10 // Initial allocation size for entities
-#define ENTITY_RESIZE_FACTOR 2 // Resize factor when safe_reallocating
-#define INITIAL_TEXTURE_CAPACITY 10 // Initial allocation size for textures
-#define TEXTURE_RESIZE_FACTOR 2 // Resize factor for textures
-
-typedef enum {
-    RECTANGLE,
-    CIRCLE,
-    TRIANGLE,
-    UNKNOWN
-} ShapeType;
-
-typedef struct {
-    ShapeType type;
-    Vector2 position1;
-    Vector2 position2;
-    Vector2 position3;
-    Color color;
-    unsigned short thickness;
-    bool filled;
-} Shape;
-
-typedef struct s_EntitySystem {
-    t_Entity** entities; // Changed to dynamic allocation
-    int num_entities;
-    int capacity_entities;
-
-    t_Texture* textures; // Changed to dynamic allocation
-    int num_textures;
-    int capacity_textures;
-} t_EntitySystem;
-
-extern t_EntitySystem* g_entity_system;
 
 t_EntitySystem* create_entity_system();
 void destroy_entity_system(t_EntitySystem* entity_system);

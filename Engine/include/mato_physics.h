@@ -11,10 +11,29 @@
 #include <raymath.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <util.h>
+
+#include <threadpool.h>
+
+typedef struct {
+    t_Entity** entities;
+    int start;
+    int end;
+    float deltaTime;
+} IntegrateBatchTask;
+
+typedef struct {
+    t_Entity** entities;
+    int start;
+    int end;
+    int entityCount;
+    int* col_checks;
+} CollisionBatchTask;
 
 // Define gravitational constant (modifiable as needed)
 #define GRAVITY_Y -981.0f
 #define GRAVITY (Vector3){0.0f, GRAVITY_Y, 0.0f}
+#define MAX_COLLISION_CHECK_DISTANCE 25.0f
 
 extern const __m128 HALF_PS;
 extern const __m128 ZERO_PS;

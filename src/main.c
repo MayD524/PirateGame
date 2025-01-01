@@ -7,6 +7,8 @@
 #include <player.h>
 #include <scene.h>
 
+#define DEBUG_DONT_HIDE
+
 #ifdef __linux__
     #define DEBUG
 #endif
@@ -76,7 +78,7 @@ int main() {
     #ifdef DEBUG
         mtrace();
     #endif
-
+    
     WindowInformation* winfo = create_window_information(1080, 720, "Test", 60);
     Engine* engine = create_default_engine(winfo);
 
@@ -93,24 +95,28 @@ int main() {
         .on_render = main_render,
     };
 
+
     Vector3 test = VEC3_ZERO;
+    long entity_id = 0;
     
-    for (int i = 0; i < 25; ++i) { 
-        for (int j=0; j < 25; ++j) {
-            char *formattedString = NULL;
-            asprintf(&formattedString, "Test:%d",i+j);
-            t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
-            test = Vector3Add(test, (Vector3){ 2.0f, 0.0f, 0.0f});
-            // e->update=SillyUpdate;
-        }
-        test = VEC3_ZERO;
-        test.z = i*2;
-    }
+    // for (int i = 0; i < 50; ++i) { 
+    //     for (int j=0; j < 100; ++j) {
+    //         char *formattedString = NULL;
+    //         asprintf(&formattedString, "Test:%d",entity_id++);
+    //         t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
+    //         test = Vector3Add(test, (Vector3){ 2.0f, 0.0f, 0.0f});
+    //         // e->update=SillyUpdate;
+    //     }
+    //     test = VEC3_ZERO;
+    //     test.z = i*2;
+    // }
 
-    test.y = 10;
 
-    // t_Entity* ent = create_entity3D(engine->entity_system, "test11", "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, Vector3Scale(VEC3_ONE, 1.5f), 100.0f);
-    // ent->is_static = true;
+    t_Entity* ent = create_entity3D(engine->entity_system, "test11", "./resources/test_ship_small.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, Vector3Scale(VEC3_ONE, 0.075f), 100.0f);
+    ent->is_static = true;
+    add_tag(ent, "NO_COLLISION");
+    ent->entity3D.rotation = 180 ;
+    ent->entity3D.rotation_axis = (Vector3) { 0.0f, 1.0f, 1.0f };
 
     add_scene(engine->scene_manager, scene);
     load_scene(engine->scene_manager, "main");

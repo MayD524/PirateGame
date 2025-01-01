@@ -213,6 +213,7 @@ int next_free_entity_slot(t_EntitySystem* entity_system, PriorityRank priority_r
 void update(t_EntitySystem* entity_system) {
 
     Physics_UpdateAll(entity_system->entities, entity_system->num_entities, PHYSICS_TIME);
+    
     // Iterate through all active entities and integrate physics
     for (int i = 0; i < entity_system->num_entities; ++i) {
         t_Entity* e = entity_system->entities[i];
@@ -248,29 +249,6 @@ void update(t_EntitySystem* entity_system) {
 
     }
 
-    // Handle collisions between entities
-    for (int i = 0; i < entity_system->num_entities; ++i) {
-        t_Entity* a = entity_system->entities[i];
-        if (a == NULL || !a->is_active) continue;
-
-        for (int j = i + 1; j < entity_system->num_entities; ++j) {
-            t_Entity* b = entity_system->entities[j];
-            if (b == NULL || !b->is_active) continue;
-
-            // Check collision between entity a and entity b
-            if (Physics_CheckCollision(a, b)) {
-                // Resolve collision using impulse-based method
-                // FUTURE ME THIS IS WHAT MAKES THEM CLIMB
-                Physics_ResolveCollisionImpulse(a, b);
-
-                // Call collision callbacks if defined
-                if (a->on_collision) a->on_collision(b, a);
-                if (b->on_collision) b->on_collision(a, b);
-            }
-        }
-    }
-
-    // Optional: Handle additional updates or cleanup after physics and collisions
 }
 
 #pragma endregion
@@ -419,6 +397,10 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
 
     int total_drawn = 0;
 
+    BeginMode3D(camera);
+    DrawTextLabels3DBillboard(text_array, camera, MAX_DRAW_DISTANCE);
+    EndMode3D();
+
     for (int i = 0; i < entity_system->num_entities; ++i) {
         t_Entity* e = entity_system->entities[i];
 
@@ -437,25 +419,28 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
         if (model.meshCount == 0) { continue; }
 
         float dist = Vector3Distance(e->entity3D.position, camera.position);
-        if (dist > MAX_DRAW_DISTANCE || dist < 0) continue; 
-
-        bool withinMinDistance = dist < MIN_DRAW_DISTANCE;
-        if (!withinMinDistance && !CheckObjectInFOV(camera, e->entity3D.position, screen_width, screen_height)) continue;
-
         float alpha = 1.0f;
-        if (dist > FADE_START_DISTANCE) {
-            float t = (dist - FADE_START_DISTANCE) / (MAX_DRAW_DISTANCE - FADE_START_DISTANCE);
-            alpha = 1.0f - t; // linear fade from 1 down to 0
-        }
 
+        #define DEBUG_DONT_HIDE
+        #ifndef DEBUG_DONT_HIDE
+            if (dist > MAX_DRAW_DISTANCE || dist < 0) continue; 
+
+            bool withinMinDistance = dist < MIN_DRAW_DISTANCE;
+            if (!withinMinDistance && !CheckObjectInFOV(camera, e->entity3D.position, screen_width, screen_height)) continue;
+            
+            if (dist > FADE_START_DISTANCE) {
+                float t = (dist - FADE_START_DISTANCE) / (MAX_DRAW_DISTANCE - FADE_START_DISTANCE);
+                alpha = 1.0f - t; // linear fade from 1 down to 0
+            }
+        #endif
+        
         // Calculate the model's offset using its bounding box
         BoundingBox bbox = minfo->full_box;
         Vector3 bboxCenter = Vector3Scale(Vector3Add(bbox.min, bbox.max), 0.5f);
         Vector3 adjustedPosition = Vector3Subtract(e->entity3D.position, bboxCenter);
 
         BeginMode3D(camera);
-            DrawTextLabels3DBillboard(text_array, camera, MAX_DRAW_DISTANCE);
-
+            
             Color originalColor = model.materials[0].maps[MATERIAL_MAP_DIFFUSE].color;
 
             // Set new color with alpha
@@ -482,9 +467,11 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
     snprintf(DrawnString, 100, "Total Entities: %d", entity_system->num_entities);
     DrawText(DrawnString, 10, 60, 20, GRAY);
 
-    BeginMode3D(camera);
-    DrawHitboxes(entity_system, true);
-    EndMode3D();
+    #ifdef DEBUG_ENABLE_DRAW_HITBOXES
+        BeginMode3D(camera);
+        DrawHitboxes(entity_system, true);
+        EndMode3D();
+    #endif
 }
 
 #pragma endregion
@@ -555,7 +542,6 @@ t_Entity* create_entity3D(t_EntitySystem* es, char* entity_name, char* modelPath
     t_Tag *root = safe_malloc(sizeof(t_Tag));
     if (root == NULL) {
         printf("Memory allocation failed for entity tags.\n");
-        // Handle cleanup if necessary
     } else {
         root->tag_id = 0;
         root->next = NULL;
@@ -760,6 +746,7 @@ void add_tag(t_Entity* entity, const char* tag) {
     t_Tag* new_tag = safe_malloc(sizeof(t_Tag));
     new_tag->tag_id = entity->num_tags+1;
     new_tag->tag = tag;
+    new_tag->tag_hash = compute_tag_hash(tag);
     
     new_tag->next = entity->root_tag;
 
@@ -779,21 +766,42 @@ void add_tag(t_Entity* entity, const char* tag) {
     entity->num_tags++;
 }
 
+unsigned long compute_tag_hash(const char* tag) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *tag++)) {
+        hash = ((hash << 5) + hash) + c;  // hash * 33 + c
+    }
+    return hash;
+}
+
 int has_tag(const t_Entity* entity, const char* tag) {
-    // entity has no tags
-    if (entity->root_tag->next == NULL) {
+    if (!entity->root_tag || entity->root_tag->next == NULL) {
         return -1;
     }
 
+    unsigned long tag_hash = compute_tag_hash(tag);
     t_Tag* current = entity->root_tag->next;
+
     while (current != entity->root_tag) {
         if (strcmp(current->tag, tag) == 0) {
+            // Move to front of the list
+            if (current != entity->root_tag->next) {
+                // Detach current
+                current->prev->next = current->next;
+                current->next->prev = current->prev;
+
+                // Attach to front
+                current->next = entity->root_tag->next;
+                current->prev = entity->root_tag;
+                entity->root_tag->next->prev = current;
+                entity->root_tag->next = current;
+            }
             return current->tag_id;
         }
         current = current->next;
     }
     return -1;
-
 }
 
 void remove_tag_at(t_Entity* entity, int index) {
@@ -890,7 +898,7 @@ int load_texture(t_EntitySystem* es, const char* texture_path) {
 #pragma region Deconstruction
 void destroy_entity(t_Entity* entity) {
 
-    if (!is_address_good(entity)) { entity = NULL; }
+    if (!is_address_good(entity)) { entity = NULL; return; }
 
     entity->is_active = false;
     

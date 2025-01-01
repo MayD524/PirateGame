@@ -17,6 +17,7 @@ typedef enum {
 typedef struct s_Tag {
     const char* tag;
     unsigned int tag_id;
+    unsigned long tag_hash;
 
     struct s_Tag* next;
     struct s_Tag* prev;
@@ -88,6 +89,7 @@ typedef struct s_Entity {
     Vector3 acceleration;  // Current acceleration
     float mass;
     float inverseMass;     // For optimization
+    bool has_moved;
     bool is_grounded;
     bool is_static;        // If true, the entity is immovable
     float dampingFactor;
@@ -101,6 +103,7 @@ typedef struct s_Texture {
     Texture2D texture;
 } t_Texture;
 
+unsigned long compute_tag_hash(const char* tag);
 void print_tags(const t_Entity* entity);
 void add_tag(t_Entity* entity, const char* tag);
 const char** get_tags(const t_Entity* entity);

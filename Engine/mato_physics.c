@@ -22,6 +22,10 @@
     const __m128 NEGATE_PS = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
 #endif
 
+static ALWAYS_INLINE bool CanRunCollision(Vector3 a, Vector3 b) {
+    // TODO: Eventually we should check for point from mesh to mesh
+    return Vector3Distance(a, b) < MAX_COLLISION_CHECK_DISTANCE;
+}
 
 // Helper function to calculate inverse mass
 static float CalculateInverseMass(float mass, bool is_static) {
@@ -36,7 +40,7 @@ float Vector3LengthCustom(const Vector3 v) {
 // Utility function to normalize a vector
 Vector3 Vector3NormalizeCustom(const Vector3 v) {
     float length = Vector3LengthCustom(v);
-    if (length == 0.0f) return (Vector3){0.0f, 0.0f, 0.0f};
+    if (length < EPSILON) return (Vector3){0.0f, 0.0f, 0.0f};
     return Vector3Scale(v, 1.0f / length);
 }
 
@@ -61,6 +65,7 @@ void Physics_InitEntity(t_Entity* entity, Vector3 position, Vector3 scale, float
     entity->dampingFactor = 100.0f;
     entity->is_grounded = false;
     entity->is_active = true;
+    entity->has_moved = true;
 
     // Initialize mutex for the entity
     pthread_mutex_init(&entity->mutex, NULL);
@@ -76,6 +81,9 @@ void Physics_ApplyForce(t_Entity* entity, Vector3 force) {
 void Physics_Integrate(t_Entity* entity, float deltaTime) {
     if (!entity || deltaTime <= 0.0f) return; // Safety checks
     if (entity->is_static) return; // No integration for static entities
+
+    Vector3 startPos = entity->entity3D.position;
+    entity->has_moved = true;
 
     // **Ground Collision Detection and Response**
 
@@ -183,9 +191,18 @@ void Physics_Integrate(t_Entity* entity, float deltaTime) {
         }
     }
 
-    // **Reset Force Accumulator**
+    if (Vector3LengthCustom(entity->entity3D.velocity) != 0) {
+        // printf("%s: (%f,%f,%f)\n", entity->entity_name, entity->entity3D.velocity.x,entity->entity3D.velocity.y,entity->entity3D.velocity.z);
+    }
+
+    if (Vector3LengthCustom(entity->entity3D.velocity) < 0.66f && entity->is_grounded) {
+        entity->entity3D.velocity = (Vector3){ 0.0f, 0.0f, 0.0f };
+    }
 
     entity->forceAccum = (Vector3){0.0f, 0.0f, 0.0f};
+    if (Vector3Distance(entity->entity3D.position, startPos) < EPSILON) {
+        entity->has_moved = false;
+    }
 }
 
 // General Collision Detection between two entities
@@ -193,6 +210,8 @@ bool Physics_CheckCollision(const t_Entity* a, const t_Entity* b) {
     if (!a || !b) return false;
 
     if ((a->is_static || b->is_static) || (has_tag(a, "NO_COLLISION") != -1 || has_tag(b, "NO_COLLISION") != -1)) return false;
+
+    if (!CanRunCollision(a->entity3D.position, b->entity3D.position)) return false;
 
     // Determine collision type combinations
     if (a->collision_type == COLLISION_AABB && b->collision_type == COLLISION_AABB) {
@@ -598,27 +617,40 @@ RayHit Physics_Raycast(t_Entity* entities[], int entityCount, Ray ray) {
 
 // Physics Update Function with Multithreading
 void Physics_UpdateAll(t_Entity* entities[], int entityCount, float deltaTime) {
-    #pragma omp parallel for schedule(guided)
+    int integrates = 0;
+    
     for (int i = 0; i < entityCount; i++) {
         Physics_Integrate(entities[i], deltaTime);
+        integrates++;
     }
 
+    int col_checks = 0;
     // Iterate over all unique pairs
-    #pragma omp parallel for schedule(guided)
+    #pragma omp parallel for reduction(+:col_checks) schedule(dynamic)
     for (int i = 0; i < entityCount; i++) {
         t_Entity* entityA = entities[i];
-        if (!entityA->is_active) continue; // Early exit if entityA is inactive
+        if (!entityA->is_active) continue; // Early exit if entityA is inactive or static
 
         for (int j = i + 1; j < entityCount; j++) {
             t_Entity* entityB = entities[j];
-            if (!entityB->is_active) continue; // Skip inactive entityB
+            if (!entityB->is_active || !entityB->has_moved) continue; // Skip inactive entityB
+            if (!CanRunCollision(entityA->entity3D.position, entityB->entity3D.position)) continue;
+            {
+                
 
-            if (Physics_CheckCollision(entityA, entityB)) {
-                // It's assumed that Physics_ResolveCollisionImpulse is thread-safe
-                Physics_ResolveCollisionImpulse(entityA, entityB);
+                if (Physics_CheckCollision(entityA, entityB)) {
+                    // It's assumed that Physics_ResolveCollisionImpulse is thread-safe
+                    Physics_ResolveCollisionImpulse(entityA, entityB);
+                }
             }
+            col_checks++;
         }
     }
+    
+    
+
+    printf("Integrates: %d\n", integrates);
+    printf("Collision checks: %d\n", col_checks);
 
 }
 
