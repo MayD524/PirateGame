@@ -276,33 +276,33 @@ bool IsPointInView(Camera3D camera, Vector3 point) {
 
 void CreateGridWithLabels(float spacing, float scale, float maxDistance, TextLabelArray *labelArray, Font font) {
     // Add "0 m" label at the origin
-    AddTextLabel(labelArray, "0 m", (Vector3){0.0f, 0.1f, 0.0f}, font);
+    // AddTextLabel(labelArray, "0 m", (Vector3){0.0f, 0.1f, 0.0f}, font);
 
     Draw3DGrid(spacing, scale, maxDistance);
 
-    for(float i = spacing; i <= maxDistance; i += spacing) {
-        // Labels for X-axis lines (positive direction)
-        char labelTextX[64];
-        snprintf(labelTextX, sizeof(labelTextX), "%.0f m", i);
-        Vector3 labelPosX = { i * scale, 0.1f, 0.0f }; // Slightly above the floor
-        AddTextLabel(labelArray, labelTextX, labelPosX, font);
+    // for(float i = spacing; i <= maxDistance; i += spacing) {
+    //     // Labels for X-axis lines (positive direction)
+    //     char labelTextX[64];
+    //     snprintf(labelTextX, sizeof(labelTextX), "%.0f m", i);
+    //     Vector3 labelPosX = { i * scale, 0.1f, 0.0f }; // Slightly above the floor
+    //     AddTextLabel(labelArray, labelTextX, labelPosX, font);
 
-        // Labels for X-axis lines (negative direction)
-        char labelTextNegX[64];
-        snprintf(labelTextNegX, sizeof(labelTextNegX), "%.0f m", i);
-        Vector3 labelPosNegX = { -i * scale, 0.1f, 0.0f };
-        AddTextLabel(labelArray, labelTextNegX, labelPosNegX, font);
+    //     // Labels for X-axis lines (negative direction)
+    //     char labelTextNegX[64];
+    //     snprintf(labelTextNegX, sizeof(labelTextNegX), "%.0f m", i);
+    //     Vector3 labelPosNegX = { -i * scale, 0.1f, 0.0f };
+    //     AddTextLabel(labelArray, labelTextNegX, labelPosNegX, font);
 
-        // Labels for Z-axis lines (positive direction)
-        char labelTextZ[64];
-        snprintf(labelTextZ, sizeof(labelTextZ), "%.0f m", i);
-        Vector3 labelPosZ = { 0.0f, 0.1f, i * scale };
-        AddTextLabel(labelArray, labelTextZ, labelPosZ, font);
+    //     // Labels for Z-axis lines (positive direction)
+    //     char labelTextZ[64];
+    //     snprintf(labelTextZ, sizeof(labelTextZ), "%.0f m", i);
+    //     Vector3 labelPosZ = { 0.0f, 0.1f, i * scale };
+    //     AddTextLabel(labelArray, labelTextZ, labelPosZ, font);
 
-        // Labels for Z-axis lines (negative direction)
-        char labelTextNegZ[64];
-        snprintf(labelTextNegZ, sizeof(labelTextNegZ), "%.0f m", i);
-        Vector3 labelPosNegZ = { 0.0f, 0.1f, -i * scale };
-        AddTextLabel(labelArray, labelTextNegZ, labelPosNegZ, font);
-    }
+    //     // Labels for Z-axis lines (negative direction)
+    //     char labelTextNegZ[64];
+    //     snprintf(labelTextNegZ, sizeof(labelTextNegZ), "%.0f m", i);
+    //     Vector3 labelPosNegZ = { 0.0f, 0.1f, -i * scale };
+    //     AddTextLabel(labelArray, labelTextNegZ, labelPosNegZ, font);
+    // }
 }

@@ -64,6 +64,7 @@ void Physics_InitEntity(t_Entity* entity, Vector3 position, Vector3 scale, float
     entity->collision_type = collision_type;
     entity->dampingFactor = 100.0f;
     entity->is_grounded = false;
+    entity->in_water = false;
     entity->is_active = true;
     entity->has_moved = true;
 
@@ -117,7 +118,7 @@ void Physics_Integrate(t_Entity* entity, float deltaTime) {
     // **Force Accumulation**
 
     // Apply gravity if not grounded
-    if (!entity->is_grounded) {
+    if (!entity->is_grounded && !entity->in_water) {
         entity->forceAccum = Vector3Add(entity->forceAccum, GRAVITY);
     }
 
@@ -649,8 +650,8 @@ void Physics_UpdateAll(t_Entity* entities[], int entityCount, float deltaTime) {
     
     
 
-    printf("Integrates: %d\n", integrates);
-    printf("Collision checks: %d\n", col_checks);
+    // printf("Integrates: %d\n", integrates);
+    // printf("Collision checks: %d\n", col_checks);
 
 }
 

@@ -91,6 +91,7 @@ typedef struct s_Entity {
     float inverseMass;     // For optimization
     bool has_moved;
     bool is_grounded;
+    bool in_water;
     bool is_static;        // If true, the entity is immovable
     float dampingFactor;
     MatoMesh mesh;
