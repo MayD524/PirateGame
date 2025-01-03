@@ -114,7 +114,7 @@ void GetWaveHeights(WaterPlane *waterPlane, Vector3 *points, int pointCount, flo
 }
 
 // Draw the water plane
-void DrawWaterPlane(WaterPlane *waterPlane) {
+void DrawWaterPlane(WaterPlane *waterPlane, Vector3 cameraPosition, float renderDistance) {
     int rows = waterPlane->rows;
     int cols = waterPlane->cols;
     int totalCells = (rows - 1) * (cols - 1); // Total number of grid cells to process
@@ -133,15 +133,79 @@ void DrawWaterPlane(WaterPlane *waterPlane) {
         Vector3 v3 = waterPlane->vertices[nextRowStart + j];
         Vector3 v4 = waterPlane->vertices[nextRowStart + j + 1];
 
+        // Calculate the distance from the camera to the vertices of the cell
+        float distV1 = Vector3Distance(cameraPosition, v1);
+        float distV2 = Vector3Distance(cameraPosition, v2);
+        float distV3 = Vector3Distance(cameraPosition, v3);
+        float distV4 = Vector3Distance(cameraPosition, v4);
+
+        // Skip rendering if all vertices of the cell are beyond renderDistance
+        if (distV1 > renderDistance && distV2 > renderDistance && 
+            distV3 > renderDistance && distV4 > renderDistance) {
+            continue;
+        }
+
         // Calculate colors for each vertex
         Color c1 = CalculateVertexColor(waterPlane, v1);
         Color c2 = CalculateVertexColor(waterPlane, v2);
-        Color c3 = CalculateVertexColor(waterPlane, v3);
-        Color c4 = CalculateVertexColor(waterPlane, v4);
 
         // Draw the two triangles for the current cell
         DrawTriangle3D(v1, v3, v2, c1);
         DrawTriangle3D(v2, v3, v4, c2);
+    }
+}
+
+void DrawWaterPlane_SIMD(WaterPlane *waterPlane, Vector3 cameraPosition, float renderDistance) {
+    int rows = waterPlane->rows;
+    int cols = waterPlane->cols;
+    int totalCells = (rows - 1) * (cols - 1);
+
+    // Prepare SIMD constants
+    __m128 camPosX = _mm_set1_ps(cameraPosition.x);
+    __m128 camPosY = _mm_set1_ps(cameraPosition.y);
+    __m128 camPosZ = _mm_set1_ps(cameraPosition.z);
+    __m128 renderDistSq = _mm_set1_ps(renderDistance * renderDistance);
+
+    // Iterate over cells
+    // #pragma omp parallel for schedule(dynamic)
+    for (int index = 0; index < totalCells; index++) {
+        int i = index / (cols - 1); // Current row
+        int j = index % (cols - 1); // Current column
+
+        int rowStart = i * cols;
+        int nextRowStart = (i + 1) * cols;
+
+        // Load vertices for the current cell
+        Vector3 vertices[4] = {
+            waterPlane->vertices[rowStart + j],
+            waterPlane->vertices[rowStart + j + 1],
+            waterPlane->vertices[nextRowStart + j],
+            waterPlane->vertices[nextRowStart + j + 1]
+        };
+
+        // SSE-optimized distance calculation
+        __m128 vx = _mm_set_ps(vertices[3].x, vertices[2].x, vertices[1].x, vertices[0].x);
+        __m128 vy = _mm_set_ps(vertices[3].y, vertices[2].y, vertices[1].y, vertices[0].y);
+        __m128 vz = _mm_set_ps(vertices[3].z, vertices[2].z, vertices[1].z, vertices[0].z);
+
+        __m128 dx = _mm_sub_ps(vx, camPosX);
+        __m128 dy = _mm_sub_ps(vy, camPosY);
+        __m128 dz = _mm_sub_ps(vz, camPosZ);
+
+        __m128 distSq = _mm_add_ps(_mm_mul_ps(dx, dx), _mm_add_ps(_mm_mul_ps(dy, dy), _mm_mul_ps(dz, dz)));
+
+        // Check if any vertex is within render distance
+        __m128 cmp = _mm_cmple_ps(distSq, renderDistSq);
+        int mask = _mm_movemask_ps(cmp);
+
+        if (mask == 0) continue; // Skip if all vertices are out of range
+
+        // Draw the triangles for the current cell
+        Color c1 = CalculateVertexColor(waterPlane, vertices[0]);
+        Color c2 = CalculateVertexColor(waterPlane, vertices[1]);
+
+        DrawTriangle3D(vertices[0], vertices[2], vertices[1], c1);
+        DrawTriangle3D(vertices[1], vertices[2], vertices[3], c2);
     }
 }
 

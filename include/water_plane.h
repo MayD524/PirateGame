@@ -2,8 +2,11 @@
 #ifndef WATER_PLANE_H
 #define WATER_PLANE_H
 
+#include <immintrin.h> // For AVX intrinsics
 #include "raylib.h"
+#include <raymath.h>
 #include <stdlib.h>
+#include <omp.h>
 
 typedef struct {
     Vector3 position;   // Origin position of the water plane
@@ -24,7 +27,8 @@ WaterPlane CreateWaterPlane(Vector3 position, Vector2 size, int rows, int cols, 
 void UpdateWaterPlane(WaterPlane *waterPlane, float deltaTime);
 
 // Draw the WaterPlane
-void DrawWaterPlane(WaterPlane *waterPlane);
+void DrawWaterPlane_SIMD(WaterPlane *waterPlane, Vector3 cameraPosition, float renderDistance);
+void DrawWaterPlane(WaterPlane *waterPlane, Vector3 cameraPosition, float renderDistance);
 
 // Free WaterPlane resources
 void DestroyWaterPlane(WaterPlane *waterPlane);

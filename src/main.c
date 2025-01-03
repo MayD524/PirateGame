@@ -18,8 +18,8 @@
     #include <mcheck.h>
 #endif
 
-#define WATER_COLS 100
-#define WATER_ROWS 100
+#define WATER_COLS 1000
+#define WATER_ROWS 1000
 
 LuaContext* g_lua_context;
 Engine* g_engine;
@@ -35,7 +35,7 @@ void main_load(Scene* scene) {
     InitPlayer((Vector3){ 0.0f, 0.0f, 0.0f });
     waterPlane = safe_malloc(sizeof(WaterPlane));
     // Initialize the water shader
-    *waterPlane = CreateWaterPlane((Vector3){ 0.0f, 1.0f, 0.0f}, (Vector2){ 100.0f, 100.0f}, WATER_ROWS, WATER_COLS, BLUE, 0.5f, 1.0f);
+    *waterPlane = CreateWaterPlane((Vector3){ 0.0f, 1.0f, 0.0f}, (Vector2){ 1000.0f, 1000.0f}, WATER_ROWS, WATER_COLS, BLUE, 0.5f, 1.0f);
     
 
     // Optional: ToggleBorderlessWindowed();
@@ -48,7 +48,7 @@ void main_render(Scene* scene) {
     BeginMode3D(*g_engine->camera);
         Draw3DGrid(1, 1, 1000);
         // Update shader uniforms
-        DrawWaterPlane(waterPlane);
+        DrawWaterPlane_SIMD(waterPlane, g_engine->camera->position, MAX_DRAW_DISTANCE*3);
 
     EndMode3D();
 
@@ -66,7 +66,7 @@ void main_update(Scene* scene, float deltatime) {
 
 void SillyUpdate(t_Entity* entity, float dt) {
     float waveHeight = GetWaveHeight(waterPlane, entity->entity3D.position.x, entity->entity3D.position.z);
-    printf("WaveHeight: %f\n", waveHeight);
+    // printf("WaveHeight: %f\n", waveHeight);
     float distanceToSurface = waveHeight - entity->entity3D.position.y;
     Vector3 correctiveForce = (Vector3){ 0.0f, distanceToSurface * 1000.0f, 0.0f }; // Adjust multiplier for responsiveness
     
