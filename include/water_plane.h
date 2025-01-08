@@ -4,6 +4,7 @@
 
 #include <immintrin.h> // For AVX intrinsics
 #include "raylib.h"
+#include <rlgl.h>
 #include <raymath.h>
 #include <stdlib.h>
 #include <omp.h>
@@ -20,8 +21,22 @@ typedef struct {
     Vector3 *vertices;  // Dynamically allocated vertices of the water plane
 } WaterPlane;
 
+typedef struct {
+    Vector3 startPosition;
+    Vector2 gridSize;
+
+    int rows;
+    int cols;
+    
+    Color color;
+
+    float waveSpeed;
+    float waveHeight;
+} WaterPlaneCreationInfo;
+
 // Initialize a WaterPlane
 WaterPlane CreateWaterPlane(Vector3 position, Vector2 size, int rows, int cols, Color color, float waveSpeed, float waveHeight);
+WaterPlane CreateWaterPlane_info(WaterPlaneCreationInfo info);
 
 // Update the WaterPlane (handles wave animation)
 void UpdateWaterPlane(WaterPlane *waterPlane, float deltaTime);

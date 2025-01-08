@@ -65,17 +65,9 @@ void initialize_model_manager(ModelManager* manager) {
     manager->free_count = 0;
 }
 
-
 Engine* create_default_engine(WindowInformation* winfo) {
     Engine* engine = (Engine*) safe_malloc(sizeof(Engine));
         
-    // engine->grid3D = (SpatialGrid3D*) safe_malloc(sizeof(SpatialGrid3D));
-    // // TODO: Later make it so this is user settable
-    // // bool ok = init_spatial_grid_3d(engine->grid3D, 10, 10, 10, 10.0f, (Vector3){0,0,0}, 128);
-    // if (!ok) {
-    //     // handle error (e.g., log, exit, etc.)
-    // }
-
     engine->winfo = winfo;
     engine->entity_system = create_entity_system();
     engine->lua_context  = init_lua();
@@ -83,10 +75,10 @@ Engine* create_default_engine(WindowInformation* winfo) {
     engine->model_manager = (ModelManager*)safe_malloc(sizeof(ModelManager));
     engine->text_labels = safe_malloc(sizeof(TextLabelArray));
 
+    engine->threadpool = threadpool_create(DEFAULT_THREADPOOL_SIZE);
+
     InitTextLabelArray(engine->text_labels);
-
     initialize_model_manager(engine->model_manager);
-
 
     return engine;
 }

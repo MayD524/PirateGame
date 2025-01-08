@@ -2,7 +2,7 @@
 #include <math.h>
 
 
-float Noise2D(float x, float y) {
+static inline float Noise2D(float x, float y) {
     int n = (int)x + (int)y * 57;
     n = (n << 13) ^ n;
     return (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
@@ -42,21 +42,29 @@ WaterPlane CreateWaterPlane(Vector3 position, Vector2 size, int rows, int cols, 
     return water;
 }
 
+WaterPlane CreateWaterPlane_info(WaterPlaneCreationInfo info) {
+    return CreateWaterPlane(info.startPosition, info.gridSize, info.rows, info.cols, info.color, info.waveSpeed, info.waveHeight);
+}
+
 // Update the water plane (simulate waves)
 void UpdateWaterPlane(WaterPlane *waterPlane, float deltaTime) {
     waterPlane->time += deltaTime * waterPlane->waveSpeed;
 
-    for (int i = 0; i < waterPlane->rows; i++) {
-        for (int j = 0; j < waterPlane->cols; j++) {
-            int index = i * waterPlane->cols + j;
-            float noiseValue = SmoothNoise2D(
-                (float)j * 0.1f, 
-                (float)i * 0.1f + waterPlane->time
-            );
-            waterPlane->vertices[index].y = waterPlane->position.y + noiseValue * waterPlane->waveHeight;
-        }
+    // Use a single loop instead of nested loops
+    int totalVertices = waterPlane->rows * waterPlane->cols;
+
+    for (int index = 0; index < totalVertices; index++) {
+        int i = index / waterPlane->cols; // Calculate the row (i)
+        int j = index % waterPlane->cols; // Calculate the column (j)
+
+        float noiseValue = SmoothNoise2D(
+            (float)j * 0.1f, 
+            (float)i * 0.1f + waterPlane->time
+        );
+
+        waterPlane->vertices[index].y = waterPlane->position.y + noiseValue * waterPlane->waveHeight;
     }
-}
+} 
 
 float CClamp(float value, float min, float max) {
     if (value < min) return min;
@@ -113,12 +121,27 @@ void GetWaveHeights(WaterPlane *waterPlane, Vector3 *points, int pointCount, flo
     }
 }
 
+static inline void DrawDoubleTriangles3D(Vector3 v1, Vector3 v2, Vector3 v3, Color c1,
+                                            Vector3 v4, Vector3 v5, Vector3 v6, Color c2) {
+    rlColor4ub(c1.r, c1.g, c1.b, c1.a);
+    rlVertex3f(v1.x, v1.y, v1.z);
+    rlVertex3f(v2.x, v2.y, v2.z);
+    rlVertex3f(v3.x, v3.y, v3.z);
+
+    rlColor4ub(c2.r, c2.g, c2.b, c2.a);
+    rlVertex3f(v4.x, v4.y, v4.z);
+    rlVertex3f(v5.x, v5.y, v5.z);
+    rlVertex3f(v6.x, v6.y, v6.z);
+}
+
+
 // Draw the water plane
 void DrawWaterPlane(WaterPlane *waterPlane, Vector3 cameraPosition, float renderDistance) {
     int rows = waterPlane->rows;
     int cols = waterPlane->cols;
     int totalCells = (rows - 1) * (cols - 1); // Total number of grid cells to process
 
+    rlBegin(RL_TRIANGLES);
     for (int index = 0; index < totalCells; index++) {
         // Calculate row and column from the linear index
         int i = index / (cols - 1); // Current row
@@ -150,9 +173,11 @@ void DrawWaterPlane(WaterPlane *waterPlane, Vector3 cameraPosition, float render
         Color c2 = CalculateVertexColor(waterPlane, v2);
 
         // Draw the two triangles for the current cell
-        DrawTriangle3D(v1, v3, v2, c1);
-        DrawTriangle3D(v2, v3, v4, c2);
+        // DrawTriangle3D(v1, v3, v2, c1);
+        // DrawTriangle3D(v2, v3, v4, c2);
+        DrawDoubleTriangles3D(v1, v3, v2, c1, v2, v3, v4, c2);
     }
+    rlEnd();
 }
 
 void DrawWaterPlane_SIMD(WaterPlane *waterPlane, Vector3 cameraPosition, float renderDistance) {
@@ -168,6 +193,7 @@ void DrawWaterPlane_SIMD(WaterPlane *waterPlane, Vector3 cameraPosition, float r
 
     // Iterate over cells
     // #pragma omp parallel for schedule(dynamic)
+    rlBegin(RL_TRIANGLES);
     for (int index = 0; index < totalCells; index++) {
         int i = index / (cols - 1); // Current row
         int j = index % (cols - 1); // Current column
@@ -182,7 +208,7 @@ void DrawWaterPlane_SIMD(WaterPlane *waterPlane, Vector3 cameraPosition, float r
             waterPlane->vertices[nextRowStart + j],
             waterPlane->vertices[nextRowStart + j + 1]
         };
-
+        
         // SSE-optimized distance calculation
         __m128 vx = _mm_set_ps(vertices[3].x, vertices[2].x, vertices[1].x, vertices[0].x);
         __m128 vy = _mm_set_ps(vertices[3].y, vertices[2].y, vertices[1].y, vertices[0].y);
@@ -204,9 +230,9 @@ void DrawWaterPlane_SIMD(WaterPlane *waterPlane, Vector3 cameraPosition, float r
         Color c1 = CalculateVertexColor(waterPlane, vertices[0]);
         Color c2 = CalculateVertexColor(waterPlane, vertices[1]);
 
-        DrawTriangle3D(vertices[0], vertices[2], vertices[1], c1);
-        DrawTriangle3D(vertices[1], vertices[2], vertices[3], c2);
+        DrawDoubleTriangles3D(vertices[0], vertices[2], vertices[1], c1, vertices[1], vertices[2], vertices[3], c2);
     }
+    rlEnd();
 }
 
 // Free WaterPlane resources

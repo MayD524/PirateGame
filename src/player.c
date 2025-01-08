@@ -17,7 +17,6 @@ bool GetRayCollisionWithGround(Ray ray, float groundY, Vector3 *collisionPoint)
     return false;
 }
 
-
 static void DrawLineOnGround(Camera3D camera)
 {
     static Vector3 startPoint = { 0.0f, 0.0f, 0.0f };
@@ -114,7 +113,6 @@ static void PlaceSpheresAtScreenCenter(Camera3D camera)
     Vector3 rayEnd = Vector3Add(centerRay.position, Vector3Scale(centerRay.direction, 100.0f));
     DrawLine3D(centerRay.position, rayEnd, GREEN);
 }
-
 
 void PlayerRender(t_Entity* entity) {
     Player* player = (Player*) entity->entity_data;

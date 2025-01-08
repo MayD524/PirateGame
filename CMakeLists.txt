@@ -5,6 +5,8 @@ project(RTSGame C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+option(LOGGING_DEBUG "Enable debug mode for logging" OFF)
+
 
 # Output directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -12,6 +14,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 # Debugging flags
 set(CMAKE_C_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
+
+if (LOGGING_DEBUG)
+    add_definitions(-DLOGGING_DEBUG)
+endif()
+
 
 # Enable FetchContent module
 include(FetchContent)

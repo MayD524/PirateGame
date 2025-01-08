@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <raylib.h>
 
+#include <threadpool.h>
 #include <extended_memory.h>
 #include <custom3d.h>
 #include <scene.h>
@@ -47,6 +48,7 @@ typedef struct {
     ModelManager* model_manager;
 
     WindowInformation* winfo;
+    threadpool_t* threadpool;
 
     // SpatialGrid3D* grid3D;
     
