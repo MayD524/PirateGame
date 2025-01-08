@@ -103,17 +103,17 @@ int main() {
     Vector3 test = { 10, 10, 10 };
     long entity_id = 0;
     
-    for (int i = 0; i < 100; ++i) { 
-        for (int j=0; j < 100; ++j) {
-            char *formattedString = NULL;
-            asprintf(&formattedString, "Test:%d",entity_id++);
-            t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
-            test = Vector3Add(test, (Vector3){ 2.0f, 0.0f, 0.0f});
-            e->update=SillyUpdate;
-        }
-        test = VEC3_ZERO;
-        test.z = i*2;
-    }
+    // for (int i = 0; i < 100; ++i) { 
+    //     for (int j=0; j < 100; ++j) {
+    //         char *formattedString = NULL;
+    //         asprintf(&formattedString, "Test:%d",entity_id++);
+    //         t_Entity* e = create_entity3D(engine->entity_system, formattedString, "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
+    //         test = Vector3Add(test, (Vector3){ 2.0f, 0.0f, 0.0f});
+    //         e->update=SillyUpdate;
+    //     }
+    //     test = VEC3_ZERO;
+    //     test.z = i*2;
+    // }
     
     t_Entity* e = create_entity3D(engine->entity_system, "TEST", "./resources/marisa.glb", test, VEC3_ZERO, PLAYER, FLT_MAX, (Vector3){ 1.5, 1.5, 1.5}, 100.0f);
     e->update = SillyUpdate;
