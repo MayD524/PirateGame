@@ -26,13 +26,66 @@ LuaContext* g_lua_context;
 Engine* g_engine;
 PirateGame* pirateGame;
 
+void DrawSimpleBoat(Vector3 position, Vector3 size, float rotation, Color hullColor, Color deckColor) {
+    // Curved Hull (using a series of cylinders to approximate curvature)
+    float hullHeight = size.y * 0.5f;
+    float hullWidth = size.x;
+    float hullDepth = size.z;
+    int hullSegments = 8;
+    for (int i = 0; i < hullSegments; i++) {
+        float t = (float)i / (hullSegments - 1); // Normalized position (0 to 1)
+        float segmentHeight = hullHeight * (1.0f - t * t); // Parabolic curve
+        float segmentWidth = hullWidth * (1.0f - t * 0.6f); // Narrower at ends
+        float segmentDepth = hullDepth;
+
+        Vector3 segmentPosition = (Vector3){
+            position.x + (t - 0.5f) * hullWidth,
+            position.y + segmentHeight / 2,
+            position.z
+        };
+
+        DrawCube(segmentPosition, segmentWidth, segmentHeight, segmentDepth, hullColor);
+    }
+
+    // Deck (slightly inset rectangle)
+    Vector3 deckSize = (Vector3){hullWidth * 0.8f, hullHeight * 0.1f, hullDepth * 0.9f};
+    DrawCube((Vector3){position.x, position.y + hullHeight, position.z}, deckSize.x, deckSize.y, deckSize.z, deckColor);
+
+    // Mast (two vertical masts)
+    float mastHeight = size.y * 1.5f;
+    float mastRadius = size.x * 0.05f;
+    float mastOffset = size.z * 0.3f;
+    DrawCylinder((Vector3){position.x, position.y + hullHeight + mastHeight / 2, position.z - mastOffset}, mastRadius, mastRadius, mastHeight, 16, DARKBROWN);
+    DrawCylinder((Vector3){position.x, position.y + hullHeight + mastHeight / 2, position.z + mastOffset}, mastRadius, mastRadius, mastHeight, 16, DARKBROWN);
+
+    // Sails (rectangles on masts)
+    Vector3 sailSize = (Vector3){mastHeight * 0.6f, mastHeight * 0.9f, 0.1f};
+    DrawCube((Vector3){position.x, position.y + hullHeight + mastHeight * 0.6f, position.z - mastOffset}, sailSize.x, sailSize.y, sailSize.z, WHITE);
+    DrawCube((Vector3){position.x, position.y + hullHeight + mastHeight * 0.6f, position.z + mastOffset}, sailSize.x, sailSize.y, sailSize.z, WHITE);
+
+    // Railings (thin rectangles around the deck)
+    float railingHeight = size.y * 0.1f;
+    DrawCube((Vector3){position.x, position.y + hullHeight + deckSize.y + railingHeight / 2, position.z - deckSize.z / 2}, deckSize.x, railingHeight, mastRadius * 2, LIGHTGRAY);
+    DrawCube((Vector3){position.x, position.y + hullHeight + deckSize.y + railingHeight / 2, position.z + deckSize.z / 2}, deckSize.x, railingHeight, mastRadius * 2, LIGHTGRAY);
+    DrawCube((Vector3){position.x - deckSize.x / 2, position.y + hullHeight + deckSize.y + railingHeight / 2, position.z}, mastRadius * 2, railingHeight, deckSize.z, LIGHTGRAY);
+    DrawCube((Vector3){position.x + deckSize.x / 2, position.y + hullHeight + deckSize.y + railingHeight / 2, position.z}, mastRadius * 2, railingHeight, deckSize.z, LIGHTGRAY);
+
+    // Rudder (thin rectangle at the back)
+    Vector3 rudderSize = (Vector3){size.x * 0.1f, size.y * 0.3f, size.z * 0.05f};
+    DrawCube((Vector3){position.x - hullWidth / 2 - rudderSize.x / 2, position.y + hullHeight / 2, position.z}, rudderSize.x, rudderSize.y, rudderSize.z, DARKGRAY);
+
+    // Cabin (small cube on deck)
+    Vector3 cabinSize = (Vector3){size.x * 0.4f, size.y * 0.3f, size.z * 0.4f};
+    DrawCube((Vector3){position.x, position.y + hullHeight + deckSize.y + cabinSize.y / 2, position.z}, cabinSize.x, cabinSize.y, cabinSize.z, BROWN);
+}
+
 void main_load(Scene* scene) {
     printf("Setup!\n");
 
     InitPlayer((Vector3){ 0.0f, 0.0f, 0.0f });
     pirateGame->waterPlane = safe_malloc(sizeof(WaterPlane));
     // Initialize the water shader
-    *pirateGame->waterPlane = CreateWaterPlane((Vector3){ 0.0f, 10.0f, 0.0f}, (Vector2){ 1000.0f, 1000.0f}, WATER_ROWS, WATER_COLS, BLUE, 0.5f, 1.0f);
+    *pirateGame->waterPlane = CreateWaterPlane((Vector3){ 0.0f, 2.0f, 0.0f}, (Vector2){ 1000.0f, 1000.0f}, WATER_ROWS, WATER_COLS, BLUE, 0.5f, 1.0f);
     
     // Optional: ToggleBorderlessWindowed();
     DisableCursor();
@@ -45,7 +98,7 @@ void main_render(Scene* scene) {
         Draw3DGrid(1, 1, 1000);
         // Update shader uniforms
         DrawWaterPlane_SIMD(pirateGame->waterPlane, g_engine->camera->position, MAX_DRAW_DISTANCE*2);
-
+        DrawSimpleBoat(VEC3_ZERO, (Vector3){ 4.0f, 2.0f, 2.0f}, 0, RED, BLUE);
     EndMode3D();
 
     // Draw crosshair

@@ -3,32 +3,51 @@
 // ---------------------------------------------------------------------------
 // is_address_good: checks if a pointer is valid (POSIX-based, experimental)
 // ---------------------------------------------------------------------------
+
+#ifdef __linux__
+#include <signal.h>
+#include <setjmp.h>
+
 static sigjmp_buf jump_buffer;
 
-static void signal_handler(int signum) {
+static void signal_handler(int signo) {
     siglongjmp(jump_buffer, 1);
 }
 
 bool is_address_good(void *addr) {
-    // Setup signal handler
     struct sigaction old_action, new_action;
     new_action.sa_handler = signal_handler;
     sigemptyset(&new_action.sa_mask);
     new_action.sa_flags = 0;
     sigaction(SIGSEGV, &new_action, &old_action);
 
-    // Attempt to dereference
     if (sigsetjmp(jump_buffer, 1) == 0) {
         volatile char value = *((volatile char *)addr);
         (void)value;
-        sigaction(SIGSEGV, &old_action, NULL); // Restore old handler
+        sigaction(SIGSEGV, &old_action, NULL);
         return true;
     }
 
-    // If we got here, we had a SIGSEGV
-    sigaction(SIGSEGV, &old_action, NULL); // Restore old handler
+    sigaction(SIGSEGV, &old_action, NULL);
     return false;
 }
+#else
+bool is_address_good(void *addr) {
+    volatile char *ptr = (volatile char *)addr;
+
+    // Attempt to dereference the pointer
+    volatile char value;
+    if (addr == NULL) {
+        return false; // Null pointers are always invalid
+    }
+
+    // This assumes the address is valid, which is not safe
+    value = *ptr;
+    (void)value; // Suppress unused variable warnings
+    return true;
+}
+#endif
+
 
 // ---------------------------------------------------------------------------
 // Safe memory wrappers

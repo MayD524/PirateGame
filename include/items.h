@@ -49,6 +49,8 @@ typedef struct {
 
     bool is_usable;
     bool is_equippable;
+    bool is_stackable;
+    int max_stack;
     int slot;
     void (*useEffect)(void);
 

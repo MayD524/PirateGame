@@ -4,7 +4,7 @@
 #ifndef PHYSICS_H
 #define PHYSICS_H
 
-#include <immintrin.h> // For AVX/SSE intrinsics
+#include <simd_compat.h> // For AVX/SSE intrinsics
 #include <game_entity.h>
 #include <models.h>
 #include <raylib.h>
@@ -35,10 +35,10 @@ typedef struct {
 #define GRAVITY (Vector3){0.0f, GRAVITY_Y, 0.0f}
 #define MAX_COLLISION_CHECK_DISTANCE 25.0f
 
-extern const __m128 HALF_PS;
-extern const __m128 ZERO_PS;
-extern const __m128 ONE_PS;
-extern const __m128 NEGATE_PS;
+extern const simd_type HALF_PS;
+extern const simd_type ZERO_PS;
+extern const simd_type ONE_PS;
+extern const simd_type NEGATE_PS;
 
 
 #define BASE_FRICTION 0.04f

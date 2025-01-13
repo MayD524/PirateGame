@@ -5,3 +5,4 @@ test*
 build2/
 *.data
 *.old
+build_*

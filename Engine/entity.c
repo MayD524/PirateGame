@@ -475,10 +475,24 @@ void render(t_EntitySystem* entity_system, TextLabelArray* text_array, Camera ca
 
 #pragma endregion
 
-#ifdef WIN32
-#include <io.h>
-#define F_OK 0
-#define access _access
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <sys/stat.h>
+
+static inline int file_exists(const char *path) {
+    struct stat buffer;
+    return (stat(path, &buffer) == 0); // Check if the file exists
+}
+#else
+#ifdef _WIN32
+    #define access _access
+    #define F_OK 0
+#endif
+
+#include <unistd.h>
+static inline int file_exists(const char *path) {
+    return (access(path, F_OK) == 0); // Use POSIX access for native builds
+}
 #endif
 
 #pragma region Methods for base entity
@@ -517,7 +531,7 @@ t_Entity* create_entity3D(t_EntitySystem* es, char* entity_name, char* modelPath
     entity->is_grounded = true;
 
     // Load model if the path exists
-    if (access(modelPath, F_OK) == 0) {
+    if (file_exists(modelPath)) {
         entity->entity3D.model_id = add_model_info(modelPath);
 
         // Optionally, adjust collision type based on model's properties

@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(_WIN32)
+#ifdef _WIN32
 // To avoid conflicting windows.h symbols with raylib, some flags are defined
 // WARNING: Those flags avoid inclusion of some Win32 headers that could be required
 // by user at some point and won't be included...
@@ -75,4 +75,9 @@ typedef struct tagBITMAPINFOHEADER {
 #if defined(_MSC_VER) || defined(__TINYC__)
     #include "propidl.h"
 #endif
+
+#ifdef PlaySound
+#undef PlaySound
+#endif
+
 #endif

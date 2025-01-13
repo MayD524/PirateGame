@@ -1,27 +1,79 @@
 #!/bin/bash
 
-# Build configuration
-SOURCE_FILES="./src/*.c ./Engine/*.c"
-OUTPUT_FILE="./build/rts"
-INCLUDE_DIRS="-I./raylib/include -I./include -I./Engine/include"
-LIBRARY_DIRS="-L/usr/local/lib"
-LIBRARIES="-llua -lraylib -lm -ldl -lpthread"
+# Configuration
+PROJECT_NAME="RTS_Hell"   # Replace with your project name
+BUILD_DIR="build_$1"         # Base build directory
+EMSDK_PATH="/run/media/may/5e7f4d21-6691-4468-9567-61c6c67bf5d7/Github/emsdk"  # Path to Emscripten SDK (adjust as needed)
 
-# Ensure the build directory exists
-mkdir -p ./build
+# Clean and create build directory
+clean_build_dir() {
+    echo "Cleaning build directory..."
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+}
 
-# Compile the project
-gcc -Os -g -o $OUTPUT_FILE $SOURCE_FILES $INCLUDE_DIRS $LIBRARY_DIRS $LIBRARIES
+# Build for Linux/macOS
+build_native() {
+    echo "Building for $1..."
+    clean_build_dir
+    cd "$BUILD_DIR" || exit
+    cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug -DLOGGING_DEBUG=ON ..
+    make -j$(nproc) || { echo "Build failed."; exit 1; }
+    echo "Build for $1 completed successfully."
+    cd ..
+}
 
-# Check if compilation was successful
-if [ $? -ne 0 ]; then
-    echo "Build failed. Please check for errors."
-    exit 1
-fi
+# Build for Windows (MinGW)
+build_windows() {
+    echo "Building for Windows..."
+    clean_build_dir
+    cd "$BUILD_DIR" || exit
+    cmake -DCMAKE_TOOLCHAIN_FILE=windows_toolchain.cmake -DCMAKE_BUILD_TYPE=Release -DLOGGING_DEBUG=ON ..
+    make -j$(nproc) || { echo "Build failed."; exit 1; }
+    echo "Build for Windows completed successfully."
+    cd ..
+}
 
-# Copy Lua scripts to the build folder
-mkdir -p ./build/scripts
-cp ./src/lua/*.lua ./build/scripts
+# Build for Web (Emscripten)
+build_web() {
+    if [ ! -d "$EMSDK_PATH" ]; then
+        echo "Emscripten SDK not found at $EMSDK_PATH. Please install it."
+        exit 1
+    fi
 
-# Notify on success
-echo "Build complete! Binary: $OUTPUT_FILE"
+    echo "Loading Emscripten environment..."
+    source "$EMSDK_PATH/emsdk_env.sh"
+
+    echo "Building for Web..."
+    clean_build_dir
+    cd "$BUILD_DIR" || exit
+    emcmake cmake -DCMAKE_BUILD_TYPE=Release -DLOGGING_DEBUG=ON -DPLATFORM=Web ..
+    emmake make || { echo "Build failed."; exit 1; }
+    echo "Build for Web completed successfully."
+    echo "Output files: $BUILD_DIR/$PROJECT_NAME.html, $PROJECT_NAME.js, $PROJECT_NAME.wasm"
+    cd ..
+}
+
+# Detect platform and build
+case "$1" in
+    linux)
+        build_native "Linux"
+        ;;
+    mac)
+        build_native "macOS"
+        ;;
+    windows)
+        build_windows
+        ;;
+    web)
+        build_web
+        ;;
+    clean)
+        clean_build_dir
+        echo "Cleaned build directory."
+        ;;
+    *)
+        echo "Usage: $0 {linux|mac|windows|web|clean}"
+        exit 1
+        ;;
+esac

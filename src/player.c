@@ -150,6 +150,7 @@ Player InitPlayer(Vector3 startPosition) {
     player->jumpStrength = 10.0f;
     player->isGrounded = true;
 
+    player->playerInventory = Inventory_Create(PLAYER_INVENTORY_SIZE);
     player->camera = (Camera*) safe_malloc(sizeof(Camera));
 
     player->camera->position = startPosition;

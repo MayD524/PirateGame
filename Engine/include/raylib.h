@@ -130,7 +130,7 @@
 // Allow custom memory allocators
 // NOTE: Require recompiling raylib sources
 #ifndef RL_safe_malloc
-    #define RL_safe_malloc(sz)       safe_malloc(sz)
+    #define RL_safe_malloc(sz)  safe_malloc(sz)
 #endif
 #ifndef RL_CALLOC
     #define RL_CALLOC(n,sz)     calloc(n,sz)

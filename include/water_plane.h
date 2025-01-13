@@ -2,12 +2,17 @@
 #ifndef WATER_PLANE_H
 #define WATER_PLANE_H
 
-#include <immintrin.h> // For AVX intrinsics
+#include <simd_compat.h> // For AVX intrinsics
 #include "raylib.h"
 #include <rlgl.h>
 #include <raymath.h>
 #include <stdlib.h>
+
+#ifndef NO_OMP
 #include <omp.h>
+#endif
+
+#define WATER_UPDATE_RATE 3
 
 typedef struct {
     Vector3 position;   // Origin position of the water plane
@@ -19,6 +24,7 @@ typedef struct {
     float time;         // Internal time tracker for wave movement
     Color color;        // Color of the water
     Vector3 *vertices;  // Dynamically allocated vertices of the water plane
+    int update_ticks;
 } WaterPlane;
 
 typedef struct {

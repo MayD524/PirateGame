@@ -1,25 +1,28 @@
 // physics.c
 #include <mato_physics.h>
 #include <pthread.h>
-#include <omp.h>
 #include <math.h>
 #include <float.h>
 
+#ifndef NO_OMP
+#include <omp.h>
+#endif 
+
 #ifdef _MSC_VER
-    __declspec(align(16)) const __m128 HALF_PS  = {0.5f, 0.5f, 0.5f, 0.0f};
-    __declspec(align(16)) const __m128 ZERO_PS  = {0.0f, 0.0f, 0.0f, 0.0f};
-    __declspec(align(16)) const __m128 ONE_PS   = {1.0f, 1.0f, 1.0f, 1.0f};
-    __declspec(align(16)) const __m128 NEGATE_PS = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
+    __declspec(align(16)) const simd_type HALF_PS  = {0.5f, 0.5f, 0.5f, 0.0f};
+    __declspec(align(16)) const simd_type ZERO_PS  = {0.0f, 0.0f, 0.0f, 0.0f};
+    __declspec(align(16)) const simd_type ONE_PS   = {1.0f, 1.0f, 1.0f, 1.0f};
+    __declspec(align(16)) const simd_type NEGATE_PS = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
 #elif defined(__GNUC__) || defined(__clang__)
-    const __m128 HALF_PS  __attribute__((aligned(16))) = {0.5f, 0.5f, 0.5f, 0.0f};
-    const __m128 ZERO_PS  __attribute__((aligned(16))) = {0.0f, 0.0f, 0.0f, 0.0f};
-    const __m128 ONE_PS   __attribute__((aligned(16))) = {1.0f, 1.0f, 1.0f, 1.0f};
-    const __m128 NEGATE_PS __attribute__((aligned(16))) = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
+    const simd_type HALF_PS  __attribute__((aligned(16))) = {0.5f, 0.5f, 0.5f, 0.0f};
+    const simd_type ZERO_PS  __attribute__((aligned(16))) = {0.0f, 0.0f, 0.0f, 0.0f};
+    const simd_type ONE_PS   __attribute__((aligned(16))) = {1.0f, 1.0f, 1.0f, 1.0f};
+    const simd_type NEGATE_PS __attribute__((aligned(16))) = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
 #else
-    const __m128 HALF_PS  = {0.5f, 0.5f, 0.5f, 0.0f};
-    const __m128 ZERO_PS  = {0.0f, 0.0f, 0.0f, 0.0f};
-    const __m128 ONE_PS   = {1.0f, 1.0f, 1.0f, 1.0f};
-    const __m128 NEGATE_PS = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
+    const simd_type HALF_PS  = {0.5f, 0.5f, 0.5f, 0.0f};
+    const simd_type ZERO_PS  = {0.0f, 0.0f, 0.0f, 0.0f};
+    const simd_type ONE_PS   = {1.0f, 1.0f, 1.0f, 1.0f};
+    const simd_type NEGATE_PS = {-0.0f, -0.0f, -0.0f, -0.0f}; // Define NEGATE_PS
 #endif
 
 static ALWAYS_INLINE bool CanRunCollision(Vector3 a, Vector3 b) {
@@ -229,12 +232,12 @@ bool Physics_CheckCollision(const t_Entity* a, const t_Entity* b) {
     }
 }
 
-static inline void ComputeTransformedBoundingBox_SIMD(const t_Entity* entity, __m128* bbox_min, __m128* bbox_max) {
+static inline void ComputeTransformedBoundingBox_SIMD(const t_Entity* entity, simd_type* bbox_min, simd_type* bbox_max) {
     // Retrieve the Raylib Model
     ModelInfo* minfo = get_model_info(entity->entity3D.model_id);
 
     // Initialize entity position vector
-    __m128 entityPos = _mm_setr_ps(
+    simd_type entityPos = simd_setr_ps(
         entity->entity3D.position.x,
         entity->entity3D.position.y,
         entity->entity3D.position.z,
@@ -242,7 +245,7 @@ static inline void ComputeTransformedBoundingBox_SIMD(const t_Entity* entity, __
     );
 
     // Load scaling vector
-    __m128 scale = _mm_setr_ps(
+    simd_type scale = simd_setr_ps(
         entity->entity3D.scale.x,
         entity->entity3D.scale.y,
         entity->entity3D.scale.z,
@@ -251,13 +254,13 @@ static inline void ComputeTransformedBoundingBox_SIMD(const t_Entity* entity, __
 
     if (minfo) {
         // Load bounding box min and max
-        __m128 boxMin = _mm_setr_ps(
+        simd_type boxMin = simd_setr_ps(
             minfo->full_box.min.x,
             minfo->full_box.min.y,
             minfo->full_box.min.z,
             0.0f
         );
-        __m128 boxMax = _mm_setr_ps(
+        simd_type boxMax = simd_setr_ps(
             minfo->full_box.max.x,
             minfo->full_box.max.y,
             minfo->full_box.max.z,
@@ -265,37 +268,37 @@ static inline void ComputeTransformedBoundingBox_SIMD(const t_Entity* entity, __
         );
 
         // Compute scaled bounding box min and max
-        __m128 scaledBoxMin = _mm_mul_ps(boxMin, scale);
-        __m128 scaledBoxMax = _mm_mul_ps(boxMax, scale);
+        simd_type scaledBoxMin = simd_mul_ps(boxMin, scale);
+        simd_type scaledBoxMax = simd_mul_ps(boxMax, scale);
 
         // Compute the final bounding boxes by adding the entity position
-        *bbox_min = _mm_add_ps(scaledBoxMin, entityPos);
-        *bbox_max = _mm_add_ps(scaledBoxMax, entityPos);
+        *bbox_min = simd_add_ps(scaledBoxMin, entityPos);
+        *bbox_max = simd_add_ps(scaledBoxMax, entityPos);
     } else {
         // Use the entity's position and scale to define the bounding box
-        __m128 halfScale = _mm_mul_ps(scale, _mm_set_ps1(0.5f));
-        *bbox_min = _mm_sub_ps(entityPos, halfScale);
-        *bbox_max = _mm_add_ps(entityPos, halfScale);
+        simd_type halfScale = simd_mul_ps(scale, simd_set_ps1(0.5f));
+        *bbox_min = simd_sub_ps(entityPos, halfScale);
+        *bbox_max = simd_add_ps(entityPos, halfScale);
     }
 }
 
 bool Physics_CheckCollisionAABB_SIMD(const t_Entity* a, const t_Entity* b) {
     if (a == NULL || b == NULL) return false;
 
-    __m128 bboxA_min, bboxA_max;
-    __m128 bboxB_min, bboxB_max;
+    simd_type bboxA_min, bboxA_max;
+    simd_type bboxB_min, bboxB_max;
 
     // Compute transformed bounding boxes for both entities
     ComputeTransformedBoundingBox_SIMD(a, &bboxA_min, &bboxA_max);
     ComputeTransformedBoundingBox_SIMD(b, &bboxB_min, &bboxB_max);
 
     // Check for separation on any axis using SIMD
-    __m128 cmpMin = _mm_cmpgt_ps(bboxA_min, bboxB_max); // A_min > B_max
-    __m128 cmpMax = _mm_cmpgt_ps(bboxB_min, bboxA_max); // B_min > A_max
-    __m128 cmpResult = _mm_or_ps(cmpMin, cmpMax);
+    simd_type cmpMin = simd_cmpgt_ps(bboxA_min, bboxB_max); // A_min > B_max
+    simd_type cmpMax = simd_cmpgt_ps(bboxB_min, bboxA_max); // B_min > A_max
+    simd_type cmpResult = simd_or_ps(cmpMin, cmpMax);
 
     // Extract the comparison results: if any axis does not overlap, return false
-    return (_mm_movemask_ps(cmpResult) == 0);
+    return (simd_movemask_ps(cmpResult) == 0);
 }
 
 // AABB Collision Detection
@@ -571,7 +574,24 @@ RayHit Physics_Raycast(t_Entity* entities[], int entityCount, Ray ray) {
     closestHit.collision.distance = FLT_MAX;
     closestHit.entity = NULL;
 
-    // Temporary storage for thread-local closest hits
+    #ifdef NO_OMP
+    // Non-OpenMP version
+    for (int i = 0; i < entityCount; i++) {
+        t_Entity* entity = entities[i];
+        if (!entity->is_active) continue;
+
+        RayCollision currentHit;
+        bool hit = Physics_RayIntersectsEntity(entity, ray, &currentHit);
+        if (hit && currentHit.distance < closestHit.collision.distance) {
+            closestHit.entity = entity;
+            closestHit.collision = currentHit;
+        }
+    }
+
+    return closestHit;
+
+    #else
+    // OpenMP version
     int num_threads = omp_get_max_threads();
     RayHit* threadClosestHits = (RayHit*)malloc(sizeof(RayHit) * num_threads);
     if (!threadClosestHits) return closestHit;
@@ -612,8 +632,9 @@ RayHit Physics_Raycast(t_Entity* entities[], int entityCount, Ray ray) {
         }
     }
 
-    free(threadClosestHits);
+    SAFE_FREE(threadClosestHits);
     return closestHit;
+    #endif
 }
 
 // Physics Update Function with Multithreading
@@ -627,7 +648,9 @@ void Physics_UpdateAll(t_Entity* entities[], int entityCount, float deltaTime) {
 
     int col_checks = 0;
     // Iterate over all unique pairs
+    #ifndef NO_OMP
     #pragma omp parallel for reduction(+:col_checks) schedule(dynamic)
+    #endif
     for (int i = 0; i < entityCount; i++) {
         t_Entity* entityA = entities[i];
         if (!entityA->is_active) continue; // Early exit if entityA is inactive or static

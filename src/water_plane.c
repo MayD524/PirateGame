@@ -39,6 +39,8 @@ WaterPlane CreateWaterPlane(Vector3 position, Vector2 size, int rows, int cols, 
         }
     }
 
+    water.update_ticks = 0;
+
     return water;
 }
 
@@ -48,6 +50,10 @@ WaterPlane CreateWaterPlane_info(WaterPlaneCreationInfo info) {
 
 // Update the water plane (simulate waves)
 void UpdateWaterPlane(WaterPlane *waterPlane, float deltaTime) {
+    if (waterPlane->update_ticks % WATER_UPDATE_RATE != 0) {
+        waterPlane->update_ticks = 0;
+        return;
+    }
     waterPlane->time += deltaTime * waterPlane->waveSpeed;
 
     // Use a single loop instead of nested loops
@@ -64,6 +70,7 @@ void UpdateWaterPlane(WaterPlane *waterPlane, float deltaTime) {
 
         waterPlane->vertices[index].y = waterPlane->position.y + noiseValue * waterPlane->waveHeight;
     }
+    waterPlane->update_ticks++;
 } 
 
 float CClamp(float value, float min, float max) {
@@ -186,10 +193,10 @@ void DrawWaterPlane_SIMD(WaterPlane *waterPlane, Vector3 cameraPosition, float r
     int totalCells = (rows - 1) * (cols - 1);
 
     // Prepare SIMD constants
-    __m128 camPosX = _mm_set1_ps(cameraPosition.x);
-    __m128 camPosY = _mm_set1_ps(cameraPosition.y);
-    __m128 camPosZ = _mm_set1_ps(cameraPosition.z);
-    __m128 renderDistSq = _mm_set1_ps(renderDistance * renderDistance);
+    simd_type camPosX = simd_set1_ps(cameraPosition.x);
+    simd_type camPosY = simd_set1_ps(cameraPosition.y);
+    simd_type camPosZ = simd_set1_ps(cameraPosition.z);
+    simd_type renderDistSq = simd_set1_ps(renderDistance * renderDistance);
 
     // Iterate over cells
     // #pragma omp parallel for schedule(dynamic)
@@ -210,19 +217,19 @@ void DrawWaterPlane_SIMD(WaterPlane *waterPlane, Vector3 cameraPosition, float r
         };
         
         // SSE-optimized distance calculation
-        __m128 vx = _mm_set_ps(vertices[3].x, vertices[2].x, vertices[1].x, vertices[0].x);
-        __m128 vy = _mm_set_ps(vertices[3].y, vertices[2].y, vertices[1].y, vertices[0].y);
-        __m128 vz = _mm_set_ps(vertices[3].z, vertices[2].z, vertices[1].z, vertices[0].z);
+        simd_type vx = simd_set_ps(vertices[3].x, vertices[2].x, vertices[1].x, vertices[0].x);
+        simd_type vy = simd_set_ps(vertices[3].y, vertices[2].y, vertices[1].y, vertices[0].y);
+        simd_type vz = simd_set_ps(vertices[3].z, vertices[2].z, vertices[1].z, vertices[0].z);
 
-        __m128 dx = _mm_sub_ps(vx, camPosX);
-        __m128 dy = _mm_sub_ps(vy, camPosY);
-        __m128 dz = _mm_sub_ps(vz, camPosZ);
+        simd_type dx = simd_sub_ps(vx, camPosX);
+        simd_type dy = simd_sub_ps(vy, camPosY);
+        simd_type dz = simd_sub_ps(vz, camPosZ);
 
-        __m128 distSq = _mm_add_ps(_mm_mul_ps(dx, dx), _mm_add_ps(_mm_mul_ps(dy, dy), _mm_mul_ps(dz, dz)));
+        simd_type distSq = simd_add_ps(simd_mul_ps(dx, dx), simd_add_ps(simd_mul_ps(dy, dy), simd_mul_ps(dz, dz)));
 
         // Check if any vertex is within render distance
-        __m128 cmp = _mm_cmple_ps(distSq, renderDistSq);
-        int mask = _mm_movemask_ps(cmp);
+        simd_type cmp = simd_cmple_ps(distSq, renderDistSq);
+        int mask = simd_movemask_ps(cmp);
 
         if (mask == 0) continue; // Skip if all vertices are out of range
 

@@ -104,18 +104,50 @@ static threadpool_task_t  g_exit_task = {0};
  * Use with caution; in real applications, you might prefer to do this in main
  * or a dedicated shutdown routine.
  */
-static threadpool_t* g_signal_pool = NULL;
+#ifdef _WIN32
+#include <windows.h>
+#include <process.h>
+static void threadpool_signal_handler(int signum);
+#else
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 static struct sigaction old_int;
 static struct sigaction old_term;
+#endif
 
+static threadpool_t* g_signal_pool = NULL;
 
+#ifdef _WIN32
+/* Windows signal handler */
 static void threadpool_signal_handler(int signum) {
     if (g_signal_pool) {
         fprintf(stderr, "[threadpool] Caught signal %d, destroying pool...\n", signum);
         threadpool_destroy(g_signal_pool);
         g_signal_pool = NULL; 
     }
-    
+
+    /* Restore default behavior for the signal */
+    signal(signum, SIG_DFL);
+    /* Re-raise the signal */
+    raise(signum);
+}
+
+static void install_signal_handlers() {
+    /* Install handlers for Ctrl+C and termination signals */
+    signal(SIGINT, threadpool_signal_handler);
+    signal(SIGTERM, threadpool_signal_handler);
+}
+
+#else
+/* POSIX signal handler */
+static void threadpool_signal_handler(int signum) {
+    if (g_signal_pool) {
+        fprintf(stderr, "[threadpool] Caught signal %d, destroying pool...\n", signum);
+        threadpool_destroy(g_signal_pool);
+        g_signal_pool = NULL; 
+    }
+
     /* Restore the old handler so the process terminates the usual way. */
     if (signum == SIGINT) {
         sigaction(SIGINT, &old_int, NULL);
@@ -126,9 +158,6 @@ static void threadpool_signal_handler(int signum) {
     raise(signum);
 }
 
-/* -------------------------------------------------------------------------
- * threadpool_create
- * ------------------------------------------------------------------------- */
 static void install_signal_handlers() {
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
@@ -144,6 +173,7 @@ static void install_signal_handlers() {
     sigaction(SIGTERM, NULL, &old_term);
     sigaction(SIGTERM, &sa, NULL);
 }
+#endif
 
 /* --------------------
  * threadpool_create
